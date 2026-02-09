@@ -1,0 +1,23 @@
+/* responsive.css — تحسينات للجوال */
+
+@media (max-width: 520px){
+  .topbar{padding:12px 10px}
+  .brandName{font-size:16px}
+  .brandTag{display:none}
+  .hud{gap:6px}
+  .pill{padding:7px 9px; font-size:13px}
+
+  .nav{gap:6px; padding:10px}
+  .tab{padding:9px 10px; font-size:13px}
+
+  .timerCircle{width:190px;height:190px}
+  .timerTime{font-size:40px}
+
+  .statsGrid{grid-template-columns:1fr}
+  input, select, .btn{padding:10px}
+}
+
+@media (max-width: 360px){
+  .timerCircle{width:170px;height:170px}
+  .timerTime{font-size:36px}
+}
