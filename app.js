@@ -1314,8 +1314,7 @@ const PRODUCTS = [
     }
   };
 
-    // داخل renderSettings() بعد ما تحسب theme/style وتعمل fallback
-const allStyles = [
+ const allStyles = [
   { v:'ring', label:'Ring' },
   { v:'minimal', label:'Minimal' },
   { v:'bold', label:'Bold' },
@@ -1324,21 +1323,18 @@ const allStyles = [
   { v:'electric', label: state.lang === 'ar' ? 'كهرباء' : 'Electric' },
 ];
 
-// عبّي القائمة بناءً على owned
 const owned = new Set(state.purchases.timerStyles || []);
+
 const fillSelect = (sel) => {
   if (!sel) return;
-  const current = sel.value;
   sel.innerHTML = '';
   allStyles.forEach(s => {
     const opt = document.createElement('option');
     opt.value = s.v;
     opt.textContent = s.label;
-    // خليه ظاهر حتى لو مش مملوك، بس disabled (اختياري)
     if (!owned.has(s.v)) opt.disabled = true;
     sel.appendChild(opt);
   });
-  // ارجع على المختار الحالي (أو fallback)
   sel.value = owned.has(state.settings.timerStyle) ? state.settings.timerStyle : 'ring';
 };
 
