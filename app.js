@@ -360,17 +360,19 @@
     }, ttl);
   };
 
-  // ---------- Products ----------
-  const PRODUCTS = [
-    { id: 'theme_sand', type: 'theme', value: 'sand', nameAR: 'ثيم Sand', nameEN: 'Sand theme', price: 60 },
-    { id: 'theme_mint', type: 'theme', value: 'mint', nameAR: 'ثيم Mint', nameEN: 'Mint theme', price: 80 },
-    { id: 'style_minimal', type: 'timerStyle', value: 'minimal', nameAR: 'ستايل Minimal', nameEN: 'Minimal style', price: 55 },
-    { id: 'style_bold', type: 'timerStyle', value: 'bold', nameAR: 'ستايل Bold', nameEN: 'Bold style', price: 70 }
-  ];
-{ id: 'style_fire', type: 'timerStyle', value: 'fire', nameAR: 'ستايل ناري', nameEN: 'Fire style', price: 90 },
-{ id: 'style_ice', type: 'timerStyle', value: 'ice', nameAR: 'ستايل ثلجي', nameEN: 'Ice style', price: 90 },
-{ id: 'style_electric', type: 'timerStyle', value: 'electric', nameAR: 'ستايل كهرباء', nameEN: 'Electric style', price: 95 },
+// ---------- Products ----------
+const PRODUCTS = [
+  { id: 'theme_sand', type: 'theme', value: 'sand', nameAR: 'ثيم Sand', nameEN: 'Sand theme', price: 60 },
+  { id: 'theme_mint', type: 'theme', value: 'mint', nameAR: 'ثيم Mint', nameEN: 'Mint theme', price: 80 },
 
+  { id: 'style_minimal', type: 'timerStyle', value: 'minimal', nameAR: 'ستايل Minimal', nameEN: 'Minimal style', price: 55 },
+  { id: 'style_bold', type: 'timerStyle', value: 'bold', nameAR: 'ستايل Bold', nameEN: 'Bold style', price: 70 },
+
+  { id: 'style_fire', type: 'timerStyle', value: 'fire', nameAR: 'ستايل ناري', nameEN: 'Fire style', price: 90 },
+  { id: 'style_ice', type: 'timerStyle', value: 'ice', nameAR: 'ستايل ثلجي', nameEN: 'Ice style', price: 90 },
+  { id: 'style_electric', type: 'timerStyle', value: 'electric', nameAR: 'ستايل كهرباء', nameEN: 'Electric style', price: 95 },
+]; 
+  
   // ---------- App state ----------
   let state = loadState();
   let timer = {
