@@ -3,73 +3,129 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>سِراج | Siraj</title>
-  <link rel="stylesheet" href="./style.css" /> 
-  <link rel="stylesheet" href="./themes.css" />
-<link rel="stylesheet" href="./responsive.css" />
-
+  <title>سراج | Serag</title>
+  <meta name="description" content="سراج — جلسات دراسة + كوينز + مستويات + متجر + إحصائيات" />
+  <link rel="icon" href="./assets/favicon.svg" />
+  <link rel="stylesheet" href="./style.css" />
 </head>
+
 <body>
-  <header class="topbar">
+  <!-- Top App Bar -->
+  <header class="appbar">
     <div class="brand">
-      <div class="logo">سِ</div>
+      <div class="mark">س</div>
       <div class="brandText">
-        <div class="brandName">سِراج</div>
-        <div class="brandTag">Study • Focus • Shine</div>
+        <div class="brandTitle">سراج</div>
+        <div class="brandSub">رفيق الدراسة — جلسات + مكافآت + إحصائيات</div>
       </div>
     </div>
 
-    <div class="hud">
-      <div class="pill">
-        <span class="muted">🪙 نور</span>
-        <strong id="coins">0</strong>
-      </div>
-      <div class="pill">
-        <span class="muted">⭐ المستوى</span>
-        <strong id="level">1</strong>
-      </div>
-      <div class="pill">
-        <span class="muted">🔥 ستريك</span>
-        <strong id="streak">0</strong>
-      </div>
+    <div class="topActions">
+      <button class="chip" id="toggleFocus" title="وضع التركيز">🎯 تركيز</button>
+      <button class="chip" id="toggleSound" title="الصوت">🔔 صوت</button>
     </div>
   </header>
 
-  <nav class="nav">
-    <button class="tab active" data-view="study">الدراسة</button>
+  <!-- Tabs like your site -->
+  <nav class="tabs">
+    <button class="tab active" data-view="home">الرئيسية</button>
+    <button class="tab" data-view="sessions">جلسات</button>
     <button class="tab" data-view="stats">الإحصائيات</button>
     <button class="tab" data-view="store">المتجر</button>
-    <button class="tab" data-view="profile">الملف</button>
     <button class="tab" data-view="settings">الإعدادات</button>
   </nav>
 
-  <main class="container">
+  <main class="wrap">
 
-    <!-- STUDY -->
-    <section class="view show" id="view-study">
+    <!-- HOME -->
+    <section class="view show" id="view-home">
+      <div class="hero card">
+        <div class="heroTop">
+          <span class="pill">جاهز للعمل دون إنترنت لاحقاً (PWA)</span>
+          <span class="pill">حفظ تلقائي</span>
+        </div>
+
+        <h1>سراج يساعدك تثبت على الإنجاز… وتجمع <span class="accent">نور</span> 🪙</h1>
+        <p class="muted">
+          جلسات بومودورو + كوينز + مستويات + متجر ثيمات وأشكال مؤقت + إحصائيات وخط إنجاز.
+        </p>
+
+        <div class="heroBtns">
+          <button class="btn primary" data-jump="sessions">ابدأ جلسة</button>
+          <button class="btn" data-jump="store">افتح المتجر</button>
+        </div>
+      </div>
+
+      <div class="grid3">
+        <div class="card">
+          <div class="kpiTitle">جلسات مكتملة اليوم</div>
+          <div class="kpiValue" id="kpiTodaySessions">0</div>
+          <div class="kpiHint muted">هدفك: <span id="kpiGoal">4</span></div>
+        </div>
+
+        <div class="card">
+          <div class="kpiTitle">نور 🪙</div>
+          <div class="kpiValue" id="kpiCoins">0</div>
+          <div class="kpiHint muted">تصرفه بالمتجر على ثيمات/أشكال</div>
+        </div>
+
+        <div class="card">
+          <div class="kpiTitle">ستريك 🔥</div>
+          <div class="kpiValue" id="kpiStreak">0</div>
+          <div class="kpiHint muted">حافظ عليه يومياً</div>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div class="card">
+          <h2>خط الإنجاز</h2>
+          <div class="row between">
+            <span class="muted">المستوى</span>
+            <strong id="hudLevel">1</strong>
+          </div>
+          <div class="row between">
+            <span class="muted">التقدم للمستوى التالي</span>
+            <span class="muted"><span id="xpNow">0</span>/<span id="xpNext">100</span></span>
+          </div>
+          <div class="bar">
+            <div class="barFill" id="xpBar"></div>
+          </div>
+          <div class="muted" style="margin-top:10px">
+            لقبك: <strong id="hudTitle">طالب منير</strong>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>سجل سريع</h2>
+          <div class="list" id="historyMini"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SESSIONS -->
+    <section class="view" id="view-sessions">
       <div class="grid2">
         <div class="card">
           <div class="row between">
-            <h2>جلسة الدراسة</h2>
-            <div class="badge" id="timerStyleBadge">⏱️ Classic</div>
+            <h2>جلسة تركيز</h2>
+            <span class="pill" id="hudCoinsPill">🪙 0</span>
           </div>
 
-          <div class="timerWrap" id="timerWrap">
-            <div class="timerCircle" id="timerCircle">
+          <div class="timer">
+            <div class="timerRing" id="timerRing">
               <div class="timerTime" id="time">25:00</div>
-              <div class="timerSub" id="timerLabel">دراسة</div>
+              <div class="timerSub muted" id="timerLabel">جاهز — اضغط ابدأ</div>
             </div>
-            <div class="progressTiny">
-              <div class="progressTinyFill" id="timerFill"></div>
+            <div class="bar tiny">
+              <div class="barFill" id="timerFill"></div>
             </div>
           </div>
 
-          <div class="row gap">
+          <div class="grid2" style="margin-top:12px">
             <label class="field">
               <span class="muted">المادة</span>
-              <input id="subject" type="text" placeholder="مثال: رياضيات" maxlength="24" />
+              <input id="subject" type="text" placeholder="مثال: رياضيات" maxlength="24">
             </label>
-
             <label class="field">
               <span class="muted">نوع الجلسة</span>
               <select id="mode">
@@ -80,88 +136,73 @@
             </label>
           </div>
 
-          <div class="row gap">
+          <div class="row gap" style="margin-top:12px;flex-wrap:wrap">
             <button class="btn primary" id="startBtn">ابدأ</button>
             <button class="btn" id="pauseBtn">إيقاف مؤقت</button>
             <button class="btn danger" id="resetBtn">إعادة</button>
+            <button class="btn" id="nextBtn">التالي</button>
           </div>
 
-          <div class="row between">
-            <div class="muted">مكافأة الإكمال</div>
-            <div class="pill">
-              <span class="muted">🪙</span>
-              <strong id="rewardPreview">+10</strong>
-            </div>
+          <div class="row between" style="margin-top:12px">
+            <span class="muted">مكافأة الإكمال</span>
+            <strong id="rewardPreview">+10 نور</strong>
           </div>
         </div>
 
         <div class="card">
-          <h2>خط الإنجاز</h2>
+          <h2>تقدم اليوم</h2>
 
           <div class="row between">
-            <div class="muted">التقدّم للمستوى التالي</div>
-            <div class="muted"><span id="xpNow">0</span>/<span id="xpNext">100</span></div>
+            <span class="muted">جلسات دراسة مكتملة</span>
+            <strong><span id="todaySessions">0</span>/<span id="dailyGoal">4</span></strong>
           </div>
-
-          <div class="progress">
-            <div class="progressFill" id="xpBar"></div>
+          <div class="bar">
+            <div class="barFill" id="dailyBar"></div>
           </div>
 
           <div class="divider"></div>
 
-          <h3>هدف اليوم</h3>
-          <div class="row between">
-            <div class="muted">جلسات مكتملة اليوم</div>
-            <div><strong id="todaySessions">0</strong> / <span id="dailyGoal">4</span></div>
-          </div>
-          <div class="progress">
-            <div class="progressFill" id="dailyBar"></div>
-          </div>
-
-          <div class="row between">
-            <div class="muted">مكافأة هدف اليوم</div>
-            <div class="pill"><span class="muted">🪙</span><strong>+30</strong></div>
-          </div>
-
-          <div class="divider"></div>
-
-          <h3>سجل سريع</h3>
-          <div class="list" id="historyMini"></div>
+          <h3>آخر الجلسات</h3>
+          <div class="list" id="historyFull"></div>
         </div>
       </div>
     </section>
 
     <!-- STATS -->
     <section class="view" id="view-stats">
+      <div class="grid3">
+        <div class="card">
+          <div class="kpiTitle">جلسات اليوم</div>
+          <div class="kpiValue" id="statToday">0</div>
+          <div class="kpiHint muted">يتحدث مباشرة</div>
+        </div>
+        <div class="card">
+          <div class="kpiTitle">جلسات الأسبوع</div>
+          <div class="kpiValue" id="statWeek">0</div>
+          <div class="kpiHint muted">آخر 7 أيام</div>
+        </div>
+        <div class="card">
+          <div class="kpiTitle">دقائق الدراسة</div>
+          <div class="kpiValue" id="statMinutes">0</div>
+          <div class="kpiHint muted">مجموع الدراسة</div>
+        </div>
+      </div>
+
       <div class="grid2">
         <div class="card">
-          <h2>ملخص</h2>
-          <div class="statsGrid">
-            <div class="stat">
-              <div class="muted">جلسات اليوم</div>
-              <div class="big" id="statToday">0</div>
-            </div>
-            <div class="stat">
-              <div class="muted">جلسات الأسبوع</div>
-              <div class="big" id="statWeek">0</div>
-            </div>
-            <div class="stat">
-              <div class="muted">دقائق الدراسة</div>
-              <div class="big" id="statMinutes">0</div>
-            </div>
-            <div class="stat">
-              <div class="muted">أكثر مادة</div>
-              <div class="big" id="statTop">—</div>
-            </div>
-          </div>
+          <h2>توزيع المواد</h2>
+          <div class="muted">أكثر مادة درستها</div>
+          <div class="big" id="statTop">—</div>
+          <div class="divider"></div>
+          <div class="muted">ملاحظة: نسخة MVP — ممكن نضيف رسم بياني لاحقاً.</div>
         </div>
 
         <div class="card">
-          <h2>آخر الجلسات</h2>
-          <div class="list" id="historyFull"></div>
-          <div class="row gap">
-            <button class="btn danger" id="clearHistory">مسح السجل</button>
+          <div class="row between">
+            <h2>إدارة البيانات</h2>
+            <button class="btn danger" id="clearHistory">تصفير السجل</button>
           </div>
+          <p class="muted">يمسح سجل الجلسات فقط (لا يمسح المتجر/الملف).</p>
         </div>
       </div>
     </section>
@@ -171,69 +212,51 @@
       <div class="card">
         <div class="row between">
           <h2>المتجر</h2>
-          <div class="pill"><span class="muted">رصيدك</span> <strong id="coins2">0</strong></div>
+          <span class="pill">رصيدك: 🪙 <strong id="coins2">0</strong></span>
         </div>
-        <p class="muted">اشتري أشكال/ثيمات باستخدام 🪙 نور. بعد الشراء تقدر تفعّلها من الملف الشخصي.</p>
+        <p class="muted">اشتري ثيمات وأشكال للمؤقت باستخدام نور.</p>
       </div>
 
       <div class="grid3" id="storeGrid"></div>
-    </section>
-
-    <!-- PROFILE -->
-    <section class="view" id="view-profile">
-      <div class="grid2">
-        <div class="card">
-          <h2>الملف الشخصي</h2>
-
-          <div class="row gap">
-            <label class="field">
-              <span class="muted">اسمك</span>
-              <input id="username" type="text" placeholder="سراج" maxlength="18" />
-            </label>
-            <div class="field">
-              <span class="muted">لقب</span>
-              <div class="pill" id="title">طالب منير</div>
-            </div>
-          </div>
-
-          <div class="divider"></div>
-
-          <h3>التخصيص</h3>
-          <div class="row gap">
-            <label class="field">
-              <span class="muted">ثيم</span>
-              <select id="themeSelect"></select>
-            </label>
-            <label class="field">
-              <span class="muted">شكل المؤقت</span>
-              <select id="timerStyleSelect"></select>
-            </label>
-          </div>
-
-          <div class="row gap">
-            <button class="btn primary" id="saveProfile">حفظ</button>
-          </div>
-        </div>
-
-        <div class="card">
-          <h2>الإنجازات</h2>
-          <div class="list" id="achievements"></div>
-        </div>
-      </div>
     </section>
 
     <!-- SETTINGS -->
     <section class="view" id="view-settings">
       <div class="grid2">
         <div class="card">
-          <h2>الإعدادات</h2>
-          <div class="row gap">
+          <h2>الملف والإعدادات</h2>
+
+          <div class="grid2">
             <label class="field">
-              <span class="muted">هدف يومي (جلسات)</span>
-              <input id="dailyGoalInput" type="number" min="1" max="12" value="4" />
+              <span class="muted">اسمك</span>
+              <input id="username" type="text" placeholder="سراج" maxlength="18">
+            </label>
+            <div class="field">
+              <span class="muted">لقبك</span>
+              <div class="pill" id="title">طالب منير</div>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="grid2">
+            <label class="field">
+              <span class="muted">هدف يومي (جلسات دراسة)</span>
+              <input id="dailyGoalInput" type="number" min="1" max="12" value="4">
             </label>
             <label class="field">
-              <span class="muted">صوت تنبيه</span>
+              <span class="muted">ثيم</span>
+              <select id="themeSelect"></select>
+            </label>
+          </div>
+
+          <div class="grid2" style="margin-top:10px">
+            <label class="field">
+              <span class="muted">شكل المؤقت</span>
+              <select id="timerStyleSelect"></select>
+            </label>
+            <label class="field">
+              <span class="muted">الصوت</span>
               <select id="soundSelect">
                 <option value="on">مفعّل</option>
                 <option value="off">مطفأ</option>
@@ -241,19 +264,19 @@
             </label>
           </div>
 
-          <div class="row gap">
-            <button class="btn primary" id="saveSettings">حفظ</button>
-            <button class="btn danger" id="resetAll">إعادة ضبط كل شيء</button>
+          <div class="row gap" style="margin-top:12px;flex-wrap:wrap">
+            <button class="btn primary" id="saveProfile">حفظ</button>
+            <button class="btn danger" id="resetAll">تصفير كل شيء</button>
           </div>
+
+          <p class="muted" style="margin-top:10px">
+            إذا صار كاش قديم على GitHub Pages: افتح الموقع Incognito أو اعمل Hard Refresh.
+          </p>
         </div>
 
         <div class="card">
-          <h2>ملاحظات</h2>
-          <ul class="muted">
-            <li>البيانات محفوظة على جهازك (LocalStorage).</li>
-            <li>الكوينز تُمنح فقط عند إكمال جلسة دراسة.</li>
-            <li>الاستراحات ما تعطي كوينز (تركيز = إنجاز).</li>
-          </ul>
+          <h2>ملخص الإنجاز</h2>
+          <div class="list" id="achievements"></div>
         </div>
       </div>
     </section>
@@ -261,8 +284,6 @@
   </main>
 
   <div class="toast" id="toast"></div>
-
   <script src="./app.js"></script>
 </body>
 </html>
-
