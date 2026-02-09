@@ -1312,32 +1312,6 @@
     }
   };
 
-  const renderSettings = () => {
-    const daily = byId('dailyGoalInput');
-    if (daily) daily.value = String(Number(state.settings.dailyGoalMin) || 60);
-
-    const soundBtn = byId('soundToggle');
-    const soundState = byId('soundState');
-    const isOn = !!state.settings.soundOn;
-    if (soundBtn) soundBtn.classList.toggle('is-off', !isOn);
-    if (soundBtn) soundBtn.setAttribute('aria-checked', isOn ? 'true' : 'false');
-    if (soundState) soundState.textContent = isOn ? t('on') : t('off');
-
-    // selects (only if owned; otherwise fallback)
-    const themeSelect = byId('themeSelect');
-    const timerStyleSelect = byId('timerStyleSelect');
-    const modalThemeSelect = byId('modalThemeSelect');
-    const modalTimerStyleSelect = byId('modalTimerStyleSelect');
-
-    const theme = ensureOwned('theme', state.settings.theme) ? state.settings.theme : 'midnight';
-    const style = ensureOwned('timerStyle', state.settings.timerStyle) ? state.settings.timerStyle : 'ring';
-    state.settings.theme = theme;
-    state.settings.timerStyle = style;
-
-    if (themeSelect) themeSelect.value = theme;
-    if (timerStyleSelect) timerStyleSelect.value = style;
-    if (modalThemeSelect) modalThemeSelect.value = theme;
-    if (modalTimerStyleSelect) modalTimerStyleSelect.value = style; 
     // داخل renderSettings() بعد ما تحسب theme/style وتعمل fallback
 const allStyles = [
   { v:'ring', label:'Ring' },
