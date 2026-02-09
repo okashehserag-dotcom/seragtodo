@@ -1337,7 +1337,37 @@
     if (themeSelect) themeSelect.value = theme;
     if (timerStyleSelect) timerStyleSelect.value = style;
     if (modalThemeSelect) modalThemeSelect.value = theme;
-    if (modalTimerStyleSelect) modalTimerStyleSelect.value = style;
+    if (modalTimerStyleSelect) modalTimerStyleSelect.value = style; 
+    // داخل renderSettings() بعد ما تحسب theme/style وتعمل fallback
+const allStyles = [
+  { v:'ring', label:'Ring' },
+  { v:'minimal', label:'Minimal' },
+  { v:'bold', label:'Bold' },
+  { v:'fire', label: state.lang === 'ar' ? 'ناري' : 'Fire' },
+  { v:'ice', label: state.lang === 'ar' ? 'ثلجي' : 'Ice' },
+  { v:'electric', label: state.lang === 'ar' ? 'كهرباء' : 'Electric' },
+];
+
+// عبّي القائمة بناءً على owned
+const owned = new Set(state.purchases.timerStyles || []);
+const fillSelect = (sel) => {
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '';
+  allStyles.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.v;
+    opt.textContent = s.label;
+    // خليه ظاهر حتى لو مش مملوك، بس disabled (اختياري)
+    if (!owned.has(s.v)) opt.disabled = true;
+    sel.appendChild(opt);
+  });
+  // ارجع على المختار الحالي (أو fallback)
+  sel.value = owned.has(state.settings.timerStyle) ? state.settings.timerStyle : 'ring';
+};
+
+fillSelect(byId('timerStyleSelect'));
+fillSelect(byId('modalTimerStyleSelect'));
   };
 
   const updateAllUI = () => {
