@@ -1,542 +1,1643 @@
-const $ = (id) => document.getElementById(id);
+// app.js
+(() => {
+  'use strict';
 
-/* ====== State ====== */
-const DUR = { study: 25*60, short: 5*60, long: 15*60 };
-const REWARD = { studySession: 10, dailyGoal: 30, levelUp: 20, streak3: 50 };
+  // ---------- Safe DOM helpers ----------
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+  const byId = (id) => document.getElementById(id);
 
-const STORE = [
-  { id:"theme-light", type:"theme", name:"Light Clean", price:0, value:"", desc:"الثيم الفاتح الافتراضي" },
-  { id:"theme-dark", type:"theme", name:"Dark Focus", price:150, value:"theme-dark", desc:"داكن مريح للعين" },
+  const on = (el, ev, fn, opts) => { if (el) el.addEventListener(ev, fn, opts); };
+  const onId = (id, ev, fn, opts) => on(byId(id), ev, fn, opts);
 
-  { id:"timer-classic", type:"timer", name:"Classic Ring", price:0, value:"Classic", desc:"حلقة بسيطة" },
-  { id:"timer-glow", type:"timer", name:"Glow Ring", price:120, value:"Glow", desc:"توهّج خفيف" },
-  { id:"timer-neon", type:"timer", name:"Neon Pulse", price:180, value:"Neon", desc:"نبض بسيط" },
-];
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+  const todayKey = (d = new Date()) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const addDays = (d, days) => { const x = new Date(d); x.setDate(x.getDate() + days); return x; };
 
-const TITLES = [
-  { lvl:1,  name:"طالب منير" },
-  { lvl:3,  name:"باحث سراج" },
-  { lvl:6,  name:"محترف التركيز" },
-  { lvl:10, name:"أسطورة الإنجاز" },
-];
+  // ---------- Storage ----------
+  const LS_KEY = 'serag_v1';
+  const defaults = {
+    lang: 'ar',
+    coins: 0,
+    level: 1,
+    xp: 0,
+    streak: 0,
+    lastActiveDate: '',
 
-const DEFAULT = {
-  username: "سراج",
-  coins: 0,
-  level: 1,
-  xp: 0,
-  streak: 0,
-  lastStudyDate: null,   // YYYY-MM-DD
-  dailyGoal: 4,
-  sound: "on",
-  focus: false,
-  owned: { themes:["theme-light"], timers:["timer-classic"] },
-  activeTheme: "theme-light",
-  activeTimer: "timer-classic",
-  history: [] // {ts,date,mode,subject,minutes,coins}
-};
+    settings: {
+      dailyGoalMin: 60,
+      soundOn: true,
+      theme: 'midnight',
+      timerStyle: 'ring'
+    },
 
-const storage = {
-  get(){
-    try{
-      const raw = localStorage.getItem("siraj_v2");
-      return raw ? { ...DEFAULT, ...JSON.parse(raw) } : structuredClone(DEFAULT);
-    }catch{
-      return structuredClone(DEFAULT);
+    purchases: {
+      themes: ['midnight'],       // owned
+      timerStyles: ['ring']       // owned
+    },
+
+    history: {
+      sessions: [],  // {id, type, mode, minutes, subject, startISO, endISO, dateKey, coins, xp}
+      quizzes: [],   // {id, subject, total, correct, coins, xp, dateKey, tsISO}
+      activity: []   // unified feed
+    },
+
+    meta: {
+      dailyGoalClaimedOn: '', // dateKey
+      cycleStudyCount: 0
     }
-  },
-  set(s){ localStorage.setItem("siraj_v2", JSON.stringify(s)); },
-  reset(){ localStorage.removeItem("siraj_v2"); }
-};
-
-let state = storage.get();
-
-/* ====== Helpers ====== */
-function toast(msg){
-  const t = $("toast");
-  t.textContent = msg;
-  t.classList.add("show");
-  setTimeout(()=>t.classList.remove("show"), 1600);
-}
-function clamp(n,min,max){ return Math.max(min, Math.min(max, n)); }
-function todayKey(){
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth()+1).padStart(2,"0");
-  const day = String(d.getDate()).padStart(2,"0");
-  return `${y}-${m}-${day}`;
-}
-function format(sec){
-  const m = Math.floor(sec/60);
-  const s = sec%60;
-  return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
-}
-function xpNext(level){ return 100 + (level-1)*40; }
-function titleForLevel(lv){
-  let t = TITLES[0].name;
-  for (const x of TITLES) if (lv >= x.lvl) t = x.name;
-  return t;
-}
-function isOwned(item){
-  if (item.type==="theme") return state.owned.themes.includes(item.id);
-  if (item.type==="timer") return state.owned.timers.includes(item.id);
-  return false;
-}
-function getItem(id){ return STORE.find(x=>x.id===id); }
-
-/* ====== Tabs ====== */
-document.querySelectorAll(".tab").forEach(btn=>{
-  btn.addEventListener("click", ()=>{
-    document.querySelectorAll(".tab").forEach(b=>b.classList.remove("active"));
-    btn.classList.add("active");
-    const v = btn.dataset.view;
-    document.querySelectorAll(".view").forEach(s=>s.classList.remove("show"));
-    $(`view-${v}`).classList.add("show");
-    renderAll();
-  });
-});
-document.querySelectorAll("[data-jump]").forEach(b=>{
-  b.addEventListener("click", ()=>{
-    const to = b.dataset.jump;
-    document.querySelectorAll(".tab").forEach(x=>{
-      x.classList.toggle("active", x.dataset.view===to);
-    });
-    document.querySelectorAll(".view").forEach(s=>s.classList.remove("show"));
-    $(`view-${to}`).classList.add("show");
-    renderAll();
-  });
-});
-
-/* ====== Focus + Sound ====== */
-$("toggleFocus").addEventListener("click", ()=>{
-  state.focus = !state.focus;
-  storage.set(state);
-  applyFocus();
-  toast(state.focus ? "🎯 وضع التركيز مفعّل" : "🎯 وضع التركيز متوقف");
-});
-$("toggleSound").addEventListener("click", ()=>{
-  state.sound = (state.sound==="on") ? "off" : "on";
-  storage.set(state);
-  renderTop();
-  toast(state.sound==="on" ? "🔔 الصوت مفعّل" : "🔕 الصوت مطفأ");
-});
-
-function applyFocus(){
-  document.body.classList.toggle("focus", !!state.focus);
-}
-function applyTheme(){
-  document.body.classList.remove("theme-dark");
-  const theme = getItem(state.activeTheme);
-  if (theme?.value) document.body.classList.add(theme.value);
-}
-
-/* ====== Timer ====== */
-let timer = { mode:"study", total:DUR.study, left:DUR.study, running:false, id:null };
-
-function setMode(mode){
-  timer.mode = mode;
-  timer.total = DUR[mode];
-  timer.left = DUR[mode];
-
-  const label = mode==="study" ? "جاهز — اضغط ابدأ" :
-                mode==="short" ? "استراحة قصيرة" : "استراحة طويلة";
-  $("timerLabel").textContent = label;
-
-  $("rewardPreview").textContent = mode==="study" ? `+${REWARD.studySession} نور` : "+0";
-  $("mode").value = mode;
-  renderTimer();
-}
-
-function start(){
-  if (timer.running) return;
-  timer.running = true;
-  $("timerLabel").textContent = "شغّال… ركّز";
-  timer.id = setInterval(()=>{
-    timer.left -= 1;
-    if (timer.left <= 0){
-      timer.left = 0;
-      renderTimer();
-      stop();
-();
-      onDone();
-      beep();
-      return;
-    }
-    renderTimer();
-  }, 1000);
-}
-function stop(){
-  timer.running = false;
-  if (timer.id) clearInterval(timer.id);
-  timer.id = null;
-}
-function reset(){
-  stop();
-  timer.left = timer.total;
-  $("timerLabel").textContent = "جاهز — اضغط ابدأ";
-  renderTimer();
-}
-function next(){
-  stop();
-  if (timer.mode==="study") setMode("short");
-  else setMode("study");
-  reset();
-  toast("⏭️ تم الانتقال");
-}
-
-$("mode").addEventListener("change", (e)=>{ setMode(e.target.value); });
-$("startBtn").addEventListener("click", ()=> start());
-$("pauseBtn").addEventListener("click", ()=>{
-  if (timer.running){ stop(); toast("⏸️ إيقاف مؤقت"); }
-  else { start(); toast("▶️ متابعة"); }
-});
-$("resetBtn").addEventListener("click", ()=>{ reset(); toast("🔁 إعادة"); });
-$("nextBtn").addEventListener("click", ()=> next());
-
-function renderTimer(){
-  $("time").textContent = format(timer.left);
-  const pct = 100 - (timer.left/timer.total)*100;
-  $("timerFill").style.width = `${clamp(pct,0,100)}%`;
-
-  // Timer style effects
-  const ring = $("timerRing");
-  ring.style.boxShadow = "0 0 0 8px rgba(245,158,11,.08) inset";
-  const style = getItem(state.activeTimer)?.value || "Classic";
-  if (style==="Glow") ring.style.boxShadow = "0 0 0 8px rgba(245,158,11,.10) inset, 0 0 26px rgba(245,158,11,.18)";
-  if (style==="Neon") ring.style.boxShadow = "0 0 0 8px rgba(245,158,11,.10) inset, 0 0 30px rgba(14,165,233,.18)";
-}
-
-function beep(){
-  if (state.sound !== "on") return;
-  try{
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = "sine";
-    o.frequency.value = 880;
-    o.connect(g); g.connect(ctx.destination);
-    g.gain.value = 0.04;
-    o.start();
-    setTimeout(()=>{ o.stop(); ctx.close(); }, 160);
-  }catch{}
-}
-
-/* ====== Rewards / Progress ====== */
-function countTodayStudy(){
-  const t = todayKey();
-  return state.history.filter(h=>h.date===t && h.mode==="study").length;
-}
-function handleStreak(){
-  const t = todayKey();
-  const last = state.lastStudyDate;
-
-  if (!last){
-    state.streak = 1;
-    state.lastStudyDate = t;
-    return;
-  }
-
-  const d1 = new Date(last+"T00:00:00");
-  const d2 = new Date(t+"T00:00:00");
-  const diff = Math.round((d2-d1)/(1000*60*60*24));
-
-  if (diff===0) return;
-  if (diff===1){
-    state.streak += 1;
-    state.lastStudyDate = t;
-    if (state.streak === 3){
-      state.coins += REWARD.streak3;
-      toast(`🔥 ستريك 3 أيام! +${REWARD.streak3} نور`);
-    }
-    return;
-  }
-  state.streak = 1;
-  state.lastStudyDate = t;
-}
-function levelUpIfNeeded(){
-  while (state.xp >= xpNext(state.level)){
-    state.xp -= xpNext(state.level);
-    state.level += 1;
-    state.coins += REWARD.levelUp;
-    toast(`🎉 مستوى جديد! +${REWARD.levelUp} نور`);
-  }
-}
-function onDone(){
-  const subject = ($("subject").value || "بدون مادة").trim();
-  const minutes = Math.round(timer.total/60);
-
-  const entry = {
-    ts: Date.now(),
-    date: todayKey(),
-    mode: timer.mode,
-    subject,
-    minutes,
-    coins: 0
   };
 
-  if (timer.mode === "study"){
-    entry.coins = REWARD.studySession;
-    state.coins += REWARD.studySession;
-    state.xp += 20;
-    handleStreak();
+  const loadState = () => {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return structuredClone(defaults);
+      const parsed = JSON.parse(raw);
+      // Shallow merge with defaults to avoid missing keys
+      return deepMerge(structuredClone(defaults), parsed);
+    } catch {
+      return structuredClone(defaults);
+    }
+  };
 
-    const nowCount = countTodayStudy();
-    if (nowCount === state.dailyGoal){
-      state.coins += REWARD.dailyGoal;
-      toast(`🎯 حققت هدف اليوم! +${REWARD.dailyGoal} نور`);
+  const saveState = () => {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch {}
+  };
+
+  const deepMerge = (base, extra) => {
+    if (!extra || typeof extra !== 'object') return base;
+    for (const k of Object.keys(extra)) {
+      const v = extra[k];
+      if (v && typeof v === 'object' && !Array.isArray(v)) {
+        base[k] = deepMerge(base[k] ?? {}, v);
+      } else {
+        base[k] = v;
+      }
+    }
+    return base;
+  };
+
+  // ---------- i18n ----------
+  const I18N = {
+    ar: {
+      focus_mode: 'وضع التركيز',
+      coins: 'النور',
+      level: 'المستوى',
+      xp: 'XP',
+      tab_timer: 'المؤقت',
+      tab_quizzes: 'كوينز',
+      tab_store: 'المتجر',
+      tab_stats: 'الإحصائيات',
+      tab_settings: 'الإعدادات',
+      level_progress: 'تقدم المستوى',
+      daily_goal: 'هدف اليوم',
+      minutes: 'دقيقة',
+
+      timer_title: 'المؤقت',
+      timer_sub: 'جلسة • استراحة قصيرة • استراحة طويلة',
+      study: 'دراسة',
+      short_break: 'استراحة قصيرة',
+      long_break: 'استراحة طويلة',
+      study_session: 'جلسة دراسة',
+      start: 'ابدأ',
+      pause: 'إيقاف مؤقت',
+      reset: 'إعادة',
+      next: 'التالي',
+      subject: 'المادة',
+      session_minutes: 'دقائق الجلسة',
+      reward_hint: 'مكافآت: النور + XP عند إكمال جلسات الدراسة وتحقيق الهدف اليومي والستريك.',
+      sessions_history: 'آخر الجلسات',
+      no_sessions: 'لا يوجد جلسات بعد',
+      no_sessions_sub: 'ابدأ جلسة دراسة وستظهر هنا تلقائيًا.',
+      achievement_line: 'خط الإنجاز',
+      today: 'اليوم',
+      daily_target: 'هدف اليوم',
+      daily_target_sub: 'حافظ على الاستمرارية وخلّيك على الستريك.',
+      levelup_reward: 'مكافأة رفع المستوى',
+      levelup_reward_sub: 'عند كل Level Up بتحصل نور إضافي.',
+      quiz_bonus: 'بونص الكوينز',
+      quiz_bonus_sub: 'كمان الكوينز بتزيد لما تحل كوينز.',
+      quick_actions: 'إجراءات سريعة',
+      claim_daily: 'تحصيل مكافأة الهدف',
+      claim_daily_sub: 'تتفعل لما تكمّل هدف اليوم.',
+      locked: 'مقفول',
+      go_quizzes: 'روح على الكوينز',
+      go_quizzes_sub: 'اختبر نفسك بنمط وزاري سريع.',
+      go_store: 'افتح المتجر',
+      go_store_sub: 'ثيمات وستايلات للمؤقت.',
+
+      quizzes_title: 'كوينز',
+      quizzes_sub: 'نمط وزاري سريع + نقاط XP + نور',
+      new_quiz: 'كوينز جديد',
+      quiz_subject: 'المادة',
+      quiz_count: 'عدد الأسئلة',
+      quiz_empty: 'ابدأ كوينز جديد',
+      quiz_empty_sub: 'اختر مادة وعدد أسئلة واضغط “كوينز جديد”.',
+      quiz_history: 'سجل الكوينز',
+      no_quiz_history: 'لا يوجد كوينز سابقًا',
+      no_quiz_history_sub: 'سجل محاولاتك بيظهر هون.',
+      skip: 'تخطي',
+      close: 'إغلاق',
+      save: 'حفظ',
+
+      store_title: 'المتجر',
+      store_sub: 'اشترِ ثيمات وستايلات للمؤقت ثم فعّلهم من الإعدادات/الملف.',
+      purchases: 'مشترياتي',
+      no_purchases: 'لا مشتريات بعد',
+      no_purchases_sub: 'لما تشتري ثيم/ستايل بيظهر هون.',
+      buy: 'شراء',
+      owned: 'مملوك',
+      apply: 'تفعيل',
+
+      stats_title: 'الإحصائيات',
+      export: 'تصدير',
+      today_minutes: 'دقائق اليوم',
+      week_minutes: 'دقائق الأسبوع',
+      total_minutes: 'إجمالي الدقائق',
+      top_subject: 'أكثر مادة',
+      weekly_line: 'آخر 7 أيام',
+      recent_activity: 'النشاط الأخير',
+      no_activity: 'لا نشاط بعد',
+      no_activity_sub: 'الجلسات والكوينز بتظهر هون.',
+
+      settings_title: 'الإعدادات',
+      settings_sub: 'خصّص هدفك اليومي، الصوت، والثيم، ووضع التركيز.',
+      daily_goal_minutes: 'هدف اليوم (بالدقائق)',
+      sound: 'الصوت',
+      on: 'تشغيل',
+      off: 'إيقاف',
+      active_theme: 'الثيم المفعل',
+      timer_style: 'ستايل المؤقت',
+      reset_all: 'إعادة ضبط كل شيء',
+      reset_all_sub: 'يمسح النور والمستوى والستريك والسجل والمشتريات والإعدادات.',
+      profile: 'الملف',
+      name: 'الاسم',
+      streak: 'ستريك',
+      modal_hint: 'تقدر تشتري ثيمات/ستايلات من المتجر ثم تفعيلها من هنا أو من الإعدادات.',
+      footer_note: 'يعمل محليًا وعلى GitHub Pages — بدون مكتبات.',
+
+      // Toast titles
+      toast_ok: 'تمام',
+      toast_warn: 'تنبيه',
+      toast_bad: 'خطأ',
+    },
+    en: {
+      focus_mode: 'Focus mode',
+      coins: 'Noor',
+      level: 'Level',
+      xp: 'XP',
+      tab_timer: 'Timer',
+      tab_quizzes: 'Quizzes',
+      tab_store: 'Store',
+      tab_stats: 'Stats',
+      tab_settings: 'Settings',
+      level_progress: 'Level progress',
+      daily_goal: 'Daily goal',
+      minutes: 'min',
+
+      timer_title: 'Timer',
+      timer_sub: 'Study • Short break • Long break',
+      study: 'Study',
+      short_break: 'Short break',
+      long_break: 'Long break',
+      study_session: 'Study session',
+      start: 'Start',
+      pause: 'Pause',
+      reset: 'Reset',
+      next: 'Next',
+      subject: 'Subject',
+      session_minutes: 'Session minutes',
+      reward_hint: 'Rewards: coins + XP for completed study sessions, daily goal, and streak.',
+      sessions_history: 'Recent sessions',
+      no_sessions: 'No sessions yet',
+      no_sessions_sub: 'Start a study session and it will appear here.',
+      achievement_line: 'Achievement line',
+      today: 'Today',
+      daily_target: 'Daily target',
+      daily_target_sub: 'Stay consistent and keep your streak.',
+      levelup_reward: 'Level-up reward',
+      levelup_reward_sub: 'Each level-up gives you extra coins.',
+      quiz_bonus: 'Quiz bonus',
+      quiz_bonus_sub: 'You also gain coins when you complete quizzes.',
+      quick_actions: 'Quick actions',
+      claim_daily: 'Claim daily reward',
+      claim_daily_sub: 'Unlocks when you finish your daily goal.',
+      locked: 'Locked',
+      go_quizzes: 'Go to quizzes',
+      go_quizzes_sub: 'Quick “exam-style” practice.',
+      go_store: 'Open store',
+      go_store_sub: 'Themes & timer styles.',
+
+      quizzes_title: 'Quizzes',
+      quizzes_sub: 'Quick exam-style + XP + Coins',
+      new_quiz: 'New quiz',
+      quiz_subject: 'Subject',
+      quiz_count: 'Questions',
+      quiz_empty: 'Start a new quiz',
+      quiz_empty_sub: 'Pick a subject & count, then press “New quiz”.',
+      quiz_history: 'Quiz history',
+      no_quiz_history: 'No quiz history yet',
+      no_quiz_history_sub: 'Your attempts will appear here.',
+      skip: 'Skip',
+      close: 'Close',
+      save: 'Save',
+
+      store_title: 'Store',
+      store_sub: 'Buy themes & timer styles, then activate them from profile/settings.',
+      purchases: 'My purchases',
+      no_purchases: 'No purchases yet',
+      no_purchases_sub: 'Bought items will appear here.',
+      buy: 'Buy',
+      owned: 'Owned',
+      apply: 'Apply',
+
+      stats_title: 'Stats',
+      export: 'Export',
+      today_minutes: 'Today minutes',
+      week_minutes: 'Week minutes',
+      total_minutes: 'Total minutes',
+      top_subject: 'Top subject',
+      weekly_line: 'Last 7 days',
+      recent_activity: 'Recent activity',
+      no_activity: 'No activity yet',
+      no_activity_sub: 'Sessions & quizzes show up here.',
+
+      settings_title: 'Settings',
+      settings_sub: 'Customize your daily goal, sound, theme, and focus mode.',
+      daily_goal_minutes: 'Daily goal (minutes)',
+      sound: 'Sound',
+      on: 'On',
+      off: 'Off',
+      active_theme: 'Active theme',
+      timer_style: 'Timer style',
+      reset_all: 'Reset everything',
+      reset_all_sub: 'Clears coins, level, streak, history, purchases, and settings.',
+      profile: 'Profile',
+      name: 'Name',
+      streak: 'Streak',
+      modal_hint: 'Buy themes/styles from the store, then activate them here or in settings.',
+      footer_note: 'Runs locally and on GitHub Pages — no libraries.',
+
+      toast_ok: 'Done',
+      toast_warn: 'Heads up',
+      toast_bad: 'Error',
+    }
+  };
+
+  const t = (key) => (I18N[state.lang] && I18N[state.lang][key]) || key;
+
+  const applyLang = () => {
+    const html = document.documentElement;
+    const isAR = state.lang === 'ar';
+    html.lang = isAR ? 'ar' : 'en';
+    html.dir = isAR ? 'rtl' : 'ltr';
+
+    const langToggle = byId('langToggle');
+    if (langToggle) {
+      const k = $('.chip__k', langToggle);
+      const v = $('.chip__v', langToggle);
+      if (k) k.textContent = isAR ? 'AR' : 'EN';
+      if (v) v.textContent = isAR ? '/ EN' : '/ AR';
+      langToggle.setAttribute('aria-label', isAR ? 'تبديل اللغة' : 'Toggle language');
     }
 
-    toast(`✅ جلسة مكتملة! +${REWARD.studySession} نور`);
-  }else{
-    toast("✅ استراحة مكتملة");
-  }
+    $$('[data-i18n]').forEach(el => {
+      const key = el.getAttribute('data-i18n');
+      if (!key) return;
+      el.textContent = t(key);
+    });
 
-  state.history.unshift(entry);
-  state.history = state.history.slice(0, 60);
+    // Placeholders
+    const subjectInput = byId('subjectInput');
+    if (subjectInput) subjectInput.placeholder = isAR ? 'مثال: رياضيات' : 'e.g. Math';
+    const quizSubject = byId('quizSubject');
+    if (quizSubject) quizSubject.placeholder = isAR ? 'مثال: فيزياء' : 'e.g. Physics';
+    const nameInput = byId('nameInput');
+    if (nameInput) nameInput.placeholder = isAR ? 'اكتب اسمك' : 'Type your name';
 
-  levelUpIfNeeded();
-  storage.set(state);
-  renderAll();
+    const profileName = byId('profileName');
+    if (profileName && !state.profileNameTouched) {
+      // keep user's custom name, only default label changes
+      profileName.textContent = isAR ? 'طالب توجيهي' : 'Student';
+    }
+  };
 
-  // auto switch (Pomodoro)
-  if (timer.mode==="study") setMode("short");
-  else setMode("study");
-  reset();
-}
+  // ---------- Toasts (safe + delegated close) ----------
+  let toastSeq = 0;
+  const toast = (msg, type = 'ok', titleKey) => {
+    const root = byId('toastRoot');
+    if (!root) return;
 
-/* ====== Store ====== */
-function buy(id){
-  const item = getItem(id);
-  if (!item) return;
+    const id = `t${Date.now()}_${toastSeq++}`;
+    const title = titleKey ? t(titleKey) : (type === 'ok' ? t('toast_ok') : type === 'warn' ? t('toast_warn') : t('toast_bad'));
 
-  if (isOwned(item)) return toast("✅ مملوك");
-  if (state.coins < item.price) return toast("❌ رصيد نور غير كافي");
+    const div = document.createElement('div');
+    div.className = `toast toast--${type}`;
+    div.setAttribute('role', 'status');
+    div.dataset.toastId = id;
 
-  state.coins -= item.price;
-  if (item.type==="theme") state.owned.themes.push(item.id);
-  if (item.type==="timer") state.owned.timers.push(item.id);
-
-  storage.set(state);
-  toast(`🛍️ تم الشراء: ${item.name}`);
-  renderAll();
-}
-
-function renderStore(){
-  const grid = $("storeGrid");
-  grid.innerHTML = "";
-
-  STORE.forEach(item=>{
-    const owned = isOwned(item);
-    const c = document.createElement("div");
-    c.className = "card";
-    c.innerHTML = `
-      <div class="row between">
-        <div>
-          <div style="font-weight:900">${item.name}</div>
-          <div class="muted" style="margin-top:6px">${item.desc}</div>
-        </div>
-        <span class="pill">🪙 <strong>${item.price}</strong></span>
+    div.innerHTML = `
+      <div class="toast__txt">
+        <div class="toast__title"></div>
+        <div class="toast__msg"></div>
       </div>
-      <div class="divider"></div>
-      <div class="row between">
-        <span class="muted">${item.type==="theme" ? "🎨 ثيم" : "⏱️ شكل مؤقت"}</span>
-        <button class="btn ${owned ? "primary" : ""}" data-buy="${item.id}">
-          ${owned ? "مملوك" : "شراء"}
-        </button>
-      </div>
+      <button class="toast__x" type="button" data-toast-close="${id}" aria-label="${state.lang === 'ar' ? 'إغلاق' : 'Close'}">✕</button>
     `;
-    grid.appendChild(c);
-  });
 
-  grid.querySelectorAll("[data-buy]").forEach(b=>{
-    b.addEventListener("click", ()=> buy(b.dataset.buy));
-  });
+    const tt = $('.toast__title', div);
+    const mm = $('.toast__msg', div);
+    if (tt) tt.textContent = title;
+    if (mm) mm.textContent = msg;
 
-  $("coins2").textContent = state.coins;
-}
+    root.appendChild(div);
 
-/* ====== Settings/Profile ====== */
-$("saveProfile").addEventListener("click", ()=>{
-  state.username = ($("username").value || "سراج").trim();
-  state.dailyGoal = clamp(parseInt($("dailyGoalInput").value || "4",10), 1, 12);
+    // auto remove
+    const ttl = 3500;
+    window.setTimeout(() => {
+      const el = root.querySelector(`[data-toast-id="${id}"]`);
+      if (el) el.remove();
+    }, ttl);
+  };
 
-  state.activeTheme = $("themeSelect").value;
-  state.activeTimer = $("timerStyleSelect").value;
-  state.sound = $("soundSelect").value;
-
-  storage.set(state);
-  applyTheme();
-  renderAll();
-  toast("✅ تم الحفظ");
-});
-
-$("resetAll").addEventListener("click", ()=>{
-  storage.reset();
-  state = storage.get();
-  stop();
-  applyTheme();
-  applyFocus();
-  setMode("study");
-  reset();
-  renderAll();
-  toast("🧹 تم تصفير كل شيء");
-});
-
-$("clearHistory").addEventListener("click", ()=>{
-  state.history = [];
-  storage.set(state);
-  renderAll();
-  toast("🧹 تم مسح السجل");
-});
-
-/* ====== Render ====== */
-function renderTop(){
-  // chips labels
-  $("toggleSound").textContent = state.sound==="on" ? "🔔 صوت" : "🔕 صامت";
-  $("toggleFocus").textContent = state.focus ? "🎯 تركيز ON" : "🎯 تركيز";
-}
-function renderHomeKPIs(){
-  $("kpiTodaySessions").textContent = countTodayStudy();
-  $("kpiGoal").textContent = state.dailyGoal;
-  $("kpiCoins").textContent = state.coins;
-  $("kpiStreak").textContent = state.streak;
-
-  $("hudLevel").textContent = state.level;
-  $("hudTitle").textContent = titleForLevel(state.level);
-
-  $("hudCoinsPill").textContent = `🪙 ${state.coins}`;
-}
-function renderProgress(){
-  const next = xpNext(state.level);
-  $("xpNow").textContent = state.xp;
-  $("xpNext").textContent = next;
-  $("xpBar").style.width = `${clamp((state.xp/next)*100,0,100)}%`;
-
-  $("dailyGoal").textContent = state.dailyGoal;
-  const today = countTodayStudy();
-  $("todaySessions").textContent = today;
-  $("dailyBar").style.width = `${clamp((today/state.dailyGoal)*100,0,100)}%`;
-}
-function renderHistory(){
-  const mini = $("historyMini");
-  const full = $("historyFull");
-  mini.innerHTML = "";
-  full.innerHTML = "";
-
-  const items = state.history.slice(0, 8);
-  if (!items.length){
-    mini.innerHTML = `<div class="muted">لا يوجد جلسات بعد.</div>`;
-    full.innerHTML = `<div class="muted">ابدأ جلسة من تبويب "جلسات".</div>`;
-    return;
-  }
-
-  items.forEach(h=>{
-    const when = new Date(h.ts).toLocaleString("ar", { hour:"2-digit", minute:"2-digit", weekday:"short" });
-    const tag = h.mode==="study" ? "دراسة" : "استراحة";
-    const right = h.coins ? `+${h.coins} 🪙` : "—";
-    const el = document.createElement("div");
-    el.className = "item";
-    el.innerHTML = `<div><strong>${tag} • ${h.subject}</strong><div class="muted">${when} • ${h.minutes} دقيقة</div></div><strong>${right}</strong>`;
-    mini.appendChild(el.cloneNode(true));
-    full.appendChild(el);
-  });
-}
-function renderStats(){
-  const today = todayKey();
-  const todayCount = state.history.filter(h=>h.date===today && h.mode==="study").length;
-
-  const week = new Set();
-  for (let i=0;i<7;i++){
-    const d = new Date();
-    d.setDate(d.getDate()-i);
-    const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-    week.add(k);
-  }
-  const weekCount = state.history.filter(h=>week.has(h.date) && h.mode==="study").length;
-
-  const minutes = state.history.filter(h=>h.mode==="study").reduce((a,b)=>a+b.minutes,0);
-
-  const map = new Map();
-  state.history.filter(h=>h.mode==="study").forEach(h=>{
-    map.set(h.subject, (map.get(h.subject)||0)+1);
-  });
-  let top="—", best=0;
-  for (const [k,v] of map.entries()){
-    if (v>best){ best=v; top=k; }
-  }
-
-  $("statToday").textContent = todayCount;
-  $("statWeek").textContent = weekCount;
-  $("statMinutes").textContent = minutes;
-  $("statTop").textContent = top;
-}
-function renderSelectors(){
-  // theme select: only owned
-  const themeSel = $("themeSelect");
-  themeSel.innerHTML = "";
-  STORE.filter(x=>x.type==="theme" && isOwned(x)).forEach(t=>{
-    const o = document.createElement("option");
-    o.value = t.id; o.textContent = t.name;
-    if (t.id===state.activeTheme) o.selected = true;
-    themeSel.appendChild(o);
-  });
-
-  const timerSel = $("timerStyleSelect");
-  timerSel.innerHTML = "";
-  STORE.filter(x=>x.type==="timer" && isOwned(x)).forEach(t=>{
-    const o = document.createElement("option");
-    o.value = t.id; o.textContent = t.name;
-    if (t.id===state.activeTimer) o.selected = true;
-    timerSel.appendChild(o);
-  });
-
-  $("username").value = state.username;
-  $("dailyGoalInput").value = state.dailyGoal;
-  $("soundSelect").value = state.sound;
-  $("title").textContent = titleForLevel(state.level);
-}
-function renderAchievements(){
-  const box = $("achievements");
-  box.innerHTML = "";
-  const rows = [
-    { k:"🪙 نور", v:`${state.coins}` },
-    { k:"⭐ المستوى", v:`${state.level}` },
-    { k:"🔥 ستريك", v:`${state.streak} يوم` },
-    { k:"✅ جلسات دراسة", v:`${state.history.filter(h=>h.mode==="study").length}` },
+  // ---------- Products ----------
+  const PRODUCTS = [
+    { id: 'theme_sand', type: 'theme', value: 'sand', nameAR: 'ثيم Sand', nameEN: 'Sand theme', price: 60 },
+    { id: 'theme_mint', type: 'theme', value: 'mint', nameAR: 'ثيم Mint', nameEN: 'Mint theme', price: 80 },
+    { id: 'style_minimal', type: 'timerStyle', value: 'minimal', nameAR: 'ستايل Minimal', nameEN: 'Minimal style', price: 55 },
+    { id: 'style_bold', type: 'timerStyle', value: 'bold', nameAR: 'ستايل Bold', nameEN: 'Bold style', price: 70 }
   ];
-  rows.forEach(r=>{
-    const el = document.createElement("div");
-    el.className = "item";
-    el.innerHTML = `<div><strong>${r.k}</strong><div class="muted">ملخص</div></div><strong>${r.v}</strong>`;
-    box.appendChild(el);
-  });
-}
 
-function renderAll(){
-  applyTheme();
-  applyFocus();
-  renderTop();
-  renderHomeKPIs();
-  renderProgress();
-  renderHistory();
-  renderStats();
-  renderStore();
-  renderSelectors();
-  renderAchievements();
-  renderTimer();
-}
+  // ---------- App state ----------
+  let state = loadState();
+  let timer = {
+    mode: 'study',        // study|short|long
+    running: false,
+    secondsLeft: 25 * 60,
+    totalSeconds: 25 * 60,
+    lastTick: 0,
+    raf: 0,
+    startedAtISO: '',
+    subject: ''
+  };
 
-/* ====== Init ====== */
-(function init(){
-  // Ensure defaults
-  if (!state.owned.themes.includes("theme-light")) state.owned.themes.push("theme-light");
-  if (!state.owned.timers.includes("timer-classic")) state.owned.timers.push("timer-classic");
-  if (!state.activeTheme) state.activeTheme = "theme-light";
-  if (!state.activeTimer) state.activeTimer = "timer-classic";
+  const XP_REWARD_PER_STUDY = 25;
+  const COINS_REWARD_PER_STUDY = 10;
+  const COINS_REWARD_LEVELUP = 15;
+  const XP_REWARD_PER_QUIZ = 15;
+  const COINS_REWARD_PER_QUIZ = 3;
+  const COINS_REWARD_DAILY_GOAL = 20;
 
-  storage.set(state);
-  setMode("study");
-  applyTheme();
-  applyFocus();
-  renderAll();
+  // ---------- Theme + timer style ----------
+  const applyTheme = () => {
+    // Theme is applied by CSS variables via body dataset (simple + safe)
+    document.body.dataset.theme = state.settings.theme || 'midnight';
+    document.body.dataset.timerStyle = state.settings.timerStyle || 'ring';
+
+    // Small visual differences for timer styles
+    const face = byId('timerFace');
+    if (!face) return;
+    face.classList.toggle('timer--minimal', document.body.dataset.timerStyle === 'minimal');
+    face.classList.toggle('timer--bold', document.body.dataset.timerStyle === 'bold');
+  };
+
+  const ensureOwned = (type, value) => {
+    if (type === 'theme') return (state.purchases.themes || []).includes(value);
+    if (type === 'timerStyle') return (state.purchases.timerStyles || []).includes(value);
+    return false;
+  };
+
+  // ---------- Streak logic ----------
+  const updateStreakOnActivity = () => {
+    const nowKey = todayKey();
+    const last = state.lastActiveDate || '';
+    if (last === nowKey) return;
+
+    // if last is yesterday => +1, else reset to 1
+    const yKey = todayKey(addDays(new Date(), -1));
+    if (last === yKey) state.streak = (state.streak || 0) + 1;
+    else state.streak = 1;
+
+    state.lastActiveDate = nowKey;
+  };
+
+  // ---------- XP/Level ----------
+  const xpNeededFor = (level) => 100 + (Math.max(1, level) - 1) * 25;
+
+  const addXP = (amount) => {
+    amount = Math.max(0, Number(amount) || 0);
+    if (!amount) return;
+
+    state.xp = (state.xp || 0) + amount;
+
+    // handle multi-level ups
+    let leveled = false;
+    while (state.xp >= xpNeededFor(state.level)) {
+      state.xp -= xpNeededFor(state.level);
+      state.level = (state.level || 1) + 1;
+      state.coins = (state.coins || 0) + COINS_REWARD_LEVELUP;
+      leveled = true;
+    }
+
+    if (leveled) toast(`${state.lang === 'ar' ? 'مبروك! رفعت مستوى' : 'Congrats! Level up'} → ${state.level} (+${COINS_REWARD_LEVELUP} ${t('coins')})`, 'ok');
+  };
+
+  const addCoins = (amount) => {
+    amount = Math.trunc(Number(amount) || 0);
+    if (!amount) return;
+    state.coins = Math.max(0, (state.coins || 0) + amount);
+  };
+
+  // ---------- Timer core ----------
+  const getStudyMinutes = () => clamp(Number(byId('customMinutes')?.value || 25), 5, 180);
+  const getModeSeconds = (mode) => {
+    if (mode === 'study') return getStudyMinutes() * 60;
+    if (mode === 'short') return 5 * 60;
+    if (mode === 'long') return 15 * 60;
+    return 25 * 60;
+  };
+
+  const setMode = (mode) => {
+    timer.mode = mode;
+    timer.running = false;
+    timer.totalSeconds = getModeSeconds(mode);
+    timer.secondsLeft = timer.totalSeconds;
+    timer.startedAtISO = '';
+    updateModeUI();
+    renderTimer();
+    setStartBtnLabel();
+  };
+
+  const setStartBtnLabel = () => {
+    const btn = byId('btnStartPause');
+    if (!btn) return;
+    const txt = $('.btn__txt', btn);
+    const icon = $('.btn__icon', btn);
+    if (!txt || !icon) return;
+
+    if (timer.running) {
+      txt.textContent = t('pause');
+      icon.textContent = '⏸';
+    } else {
+      txt.textContent = t('start');
+      icon.textContent = '▶';
+    }
+  };
+
+  const renderTimer = () => {
+    const disp = byId('timerDisplay');
+    if (disp) {
+      const m = Math.floor(timer.secondsLeft / 60);
+      const s = timer.secondsLeft % 60;
+      disp.textContent = `${pad2(m)}:${pad2(s)}`;
+    }
+
+    const label = byId('timerLabel');
+    if (label) {
+      const key = timer.mode === 'study' ? 'study_session' : (timer.mode === 'short' ? 'short_break' : 'long_break');
+      label.textContent = t(key);
+    }
+  };
+
+  const updateModeUI = () => {
+    const ids = ['modeStudy', 'modeShort', 'modeLong'];
+    ids.forEach(id => {
+      const b = byId(id);
+      if (!b) return;
+      const m = b.dataset.mode;
+      const active = m === timer.mode;
+      b.classList.toggle('is-active', active);
+      b.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+  };
+
+  const tick = (ts) => {
+    if (!timer.running) return;
+    if (!timer.lastTick) timer.lastTick = ts;
+    const delta = Math.floor((ts - timer.lastTick) / 1000);
+    if (delta >= 1) {
+      timer.lastTick += delta * 1000;
+      timer.secondsLeft = Math.max(0, timer.secondsLeft - delta);
+      renderTimer();
+      if (timer.secondsLeft <= 0) {
+        completeTimer();
+        return;
+      }
+    }
+    timer.raf = requestAnimationFrame(tick);
+  };
+
+  const startTimer = () => {
+    if (timer.running) return;
+    timer.running = true;
+    timer.lastTick = 0;
+    if (!timer.startedAtISO) timer.startedAtISO = new Date().toISOString();
+    setStartBtnLabel();
+    timer.raf = requestAnimationFrame(tick);
+  };
+
+  const pauseTimer = () => {
+    if (!timer.running) return;
+    timer.running = false;
+    setStartBtnLabel();
+    if (timer.raf) cancelAnimationFrame(timer.raf);
+    timer.raf = 0;
+  };
+
+  const resetTimer = () => {
+    pauseTimer();
+    timer.totalSeconds = getModeSeconds(timer.mode);
+    timer.secondsLeft = timer.totalSeconds;
+    timer.startedAtISO = '';
+    renderTimer();
+    toast(state.lang === 'ar' ? 'تمت إعادة المؤقت.' : 'Timer reset.', 'ok');
+  };
+
+  const nextMode = () => {
+    pauseTimer();
+    if (timer.mode === 'study') {
+      state.meta.cycleStudyCount = (state.meta.cycleStudyCount || 0) + 1;
+      // Every 4 studies => long break
+      const longNow = (state.meta.cycleStudyCount % 4 === 0);
+      setMode(longNow ? 'long' : 'short');
+    } else {
+      setMode('study');
+    }
+    saveState();
+  };
+
+  const completeTimer = () => {
+    pauseTimer();
+
+    const mode = timer.mode;
+    const endISO = new Date().toISOString();
+
+    if (mode === 'study') {
+      const mins = Math.max(1, Math.round(timer.totalSeconds / 60));
+      const subject = String(byId('subjectInput')?.value || '').trim() || (state.lang === 'ar' ? 'بدون مادة' : 'No subject');
+
+      updateStreakOnActivity();
+
+      addCoins(COINS_REWARD_PER_STUDY);
+      addXP(XP_REWARD_PER_STUDY);
+
+      // Session record
+      const rec = {
+        id: `s_${Date.now()}`,
+        type: 'session',
+        mode,
+        minutes: mins,
+        subject,
+        startISO: timer.startedAtISO || endISO,
+        endISO,
+        dateKey: todayKey(),
+        coins: COINS_REWARD_PER_STUDY,
+        xp: XP_REWARD_PER_STUDY
+      };
+      state.history.sessions.unshift(rec);
+      state.history.sessions = state.history.sessions.slice(0, 50);
+
+      pushActivity({
+        id: `a_${Date.now()}`,
+        kind: 'session',
+        title: state.lang === 'ar' ? `جلسة دراسة • ${subject}` : `Study session • ${subject}`,
+        meta: `${mins} ${t('minutes')} • +${COINS_REWARD_PER_STUDY} ${t('coins')} • +${XP_REWARD_PER_STUDY} XP`,
+        dateKey: rec.dateKey,
+        tsISO: endISO
+      });
+
+      toast(state.lang === 'ar' ? `جلسة مكتملة! +${COINS_REWARD_PER_STUDY} نور و +${XP_REWARD_PER_STUDY} XP` : `Session complete! +${COINS_REWARD_PER_STUDY} coins & +${XP_REWARD_PER_STUDY} XP`, 'ok');
+
+      // update daily goal + claim state
+      updateAllUI();
+
+      // auto-advance to break
+      nextMode();
+      return;
+    }
+
+    // breaks finished => back to study
+    toast(state.lang === 'ar' ? 'خلصت الاستراحة. ارجع للدراسة 💪' : 'Break finished. Back to study 💪', 'ok');
+    setMode('study');
+    updateAllUI();
+  };
+
+  // ---------- History + stats ----------
+  const minutesForDate = (dateK) => {
+    const ss = state.history.sessions || [];
+    return ss.filter(x => x.mode === 'study' && x.dateKey === dateK).reduce((a, b) => a + (Number(b.minutes) || 0), 0);
+  };
+
+  const weekMinutes = () => {
+    const now = new Date();
+    let sum = 0;
+    for (let i = 0; i < 7; i++) sum += minutesForDate(todayKey(addDays(now, -i)));
+    return sum;
+  };
+
+  const totalMinutes = () => (state.history.sessions || []).filter(x => x.mode === 'study').reduce((a, b) => a + (Number(b.minutes) || 0), 0);
+
+  const topSubject = () => {
+    const map = new Map();
+    (state.history.sessions || []).filter(x => x.mode === 'study').forEach(x => {
+      const k = x.subject || '—';
+      map.set(k, (map.get(k) || 0) + (Number(x.minutes) || 0));
+    });
+    let best = '—', bestV = 0;
+    for (const [k, v] of map.entries()) if (v > bestV) { best = k; bestV = v; }
+    return best || '—';
+  };
+
+  const pushActivity = (item) => {
+    state.history.activity = state.history.activity || [];
+    state.history.activity.unshift(item);
+    state.history.activity = state.history.activity.slice(0, 60);
+  };
+
+  // ---------- Daily goal claiming ----------
+  const isDailyGoalMet = () => minutesForDate(todayKey()) >= (Number(state.settings.dailyGoalMin) || 60);
+  const canClaimDaily = () => isDailyGoalMet() && state.meta.dailyGoalClaimedOn !== todayKey();
+
+  const claimDailyReward = () => {
+    if (!canClaimDaily()) {
+      toast(state.lang === 'ar' ? 'لسّا ما بتقدر تحصّل المكافأة.' : 'Not claimable yet.', 'warn');
+      return;
+    }
+    state.meta.dailyGoalClaimedOn = todayKey();
+    addCoins(COINS_REWARD_DAILY_GOAL);
+    pushActivity({
+      id: `a_${Date.now()}`,
+      kind: 'daily',
+      title: state.lang === 'ar' ? 'مكافأة الهدف اليومي' : 'Daily goal reward',
+      meta: `+${COINS_REWARD_DAILY_GOAL} ${t('coins')}`,
+      dateKey: todayKey(),
+      tsISO: new Date().toISOString()
+    });
+    toast(state.lang === 'ar' ? `تم التحصيل! +${COINS_REWARD_DAILY_GOAL} نور` : `Claimed! +${COINS_REWARD_DAILY_GOAL} coins`, 'ok');
+    saveState();
+    updateAllUI();
+  };
+
+  // ---------- Quizzes ----------
+  let quiz = {
+    active: false,
+    subject: '',
+    total: 8,
+    idx: 0,
+    correct: 0,
+    current: null
+  };
+
+  const genQuestion = () => {
+    // Simple “exam-like” MCQ: arithmetic + logic. (Safe + deterministic structure)
+    const a = clamp(Math.floor(Math.random() * 40) + 10, 10, 49);
+    const b = clamp(Math.floor(Math.random() * 20) + 5, 5, 24);
+    const ops = ['+', '-', '×'];
+    const op = ops[Math.floor(Math.random() * ops.length)];
+
+    let ans = 0;
+    if (op === '+') ans = a + b;
+    if (op === '-') ans = a - b;
+    if (op === '×') ans = a * b;
+
+    const choices = new Set([ans]);
+    while (choices.size < 4) {
+      const jitter = Math.floor(Math.random() * 9) - 4;
+      choices.add(ans + jitter * (op === '×' ? 2 : 1));
+    }
+    const arr = Array.from(choices);
+    // shuffle
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+
+    const qText = state.lang === 'ar'
+      ? `اختر الإجابة الصحيحة: ${a} ${op} ${b} = ؟`
+      : `Choose the correct answer: ${a} ${op} ${b} = ?`;
+
+    return { qText, ans, options: arr };
+  };
+
+  const startQuiz = () => {
+    const subj = String(byId('quizSubject')?.value || '').trim() || (state.lang === 'ar' ? 'عام' : 'General');
+    const count = clamp(Number(byId('quizCount')?.value || 8), 3, 20);
+
+    quiz.active = true;
+    quiz.subject = subj;
+    quiz.total = count;
+    quiz.idx = 0;
+    quiz.correct = 0;
+    quiz.current = null;
+
+    // UI
+    const box = byId('quizBox');
+    const empty = byId('quizEmpty');
+    if (box) box.hidden = false;
+    if (empty) empty.hidden = true;
+
+    nextQuizQuestion();
+  };
+
+  const endQuiz = (silent = false) => {
+    quiz.active = false;
+
+    const box = byId('quizBox');
+    const empty = byId('quizEmpty');
+    if (box) box.hidden = true;
+    if (empty) empty.hidden = false;
+
+    const feedback = byId('quizFeedback');
+    if (feedback) feedback.textContent = '';
+
+    if (!silent) toast(state.lang === 'ar' ? 'تم إنهاء الكوينز.' : 'Quiz ended.', 'ok');
+  };
+
+  const renderQuiz = () => {
+    const step = byId('quizStepText');
+    if (step) step.textContent = `${Math.min(quiz.idx + 1, quiz.total)}/${quiz.total}`;
+
+    const bar = byId('quizBar');
+    if (bar) bar.style.width = `${(quiz.total ? (quiz.idx / quiz.total) * 100 : 0)}%`;
+
+    const q = byId('quizQuestion');
+    if (q) q.textContent = quiz.current?.qText || '...';
+
+    const opts = byId('quizOptions');
+    if (opts) {
+      opts.innerHTML = '';
+      (quiz.current?.options || []).forEach((v, i) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn';
+        b.style.width = '100%';
+        b.dataset.quizOption = String(v);
+        b.textContent = `${String.fromCharCode(65 + i)}. ${v}`;
+        opts.appendChild(b);
+      });
+    }
+
+    const fb = byId('quizFeedback');
+    if (fb) fb.textContent = '';
+  };
+
+  const nextQuizQuestion = () => {
+    if (!quiz.active) return;
+    if (quiz.idx >= quiz.total) return finishQuiz();
+
+    quiz.current = genQuestion();
+    renderQuiz();
+  };
+
+  const answerQuiz = (value) => {
+    if (!quiz.active || !quiz.current) return;
+
+    const fb = byId('quizFeedback');
+    const v = Number(value);
+    const ok = v === quiz.current.ans;
+
+    if (ok) {
+      quiz.correct += 1;
+      if (fb) fb.textContent = state.lang === 'ar' ? 'صح ✅' : 'Correct ✅';
+    } else {
+      if (fb) fb.textContent = state.lang === 'ar'
+        ? `غلط ❌ (الصح: ${quiz.current.ans})`
+        : `Wrong ❌ (Answer: ${quiz.current.ans})`;
+    }
+
+    // lock options quickly (UI only; safe)
+    const opts = byId('quizOptions');
+    if (opts) $$('button[data-quiz-option]', opts).forEach(b => b.disabled = true);
+
+    window.setTimeout(() => {
+      quiz.idx += 1;
+      nextQuizQuestion();
+    }, 450);
+  };
+
+  const finishQuiz = () => {
+    const endISO = new Date().toISOString();
+    const correct = quiz.correct;
+    const total = quiz.total;
+
+    // rewards (scaled a bit)
+    updateStreakOnActivity();
+    const xp = XP_REWARD_PER_QUIZ + Math.round((correct / Math.max(1, total)) * 10);
+    const coins = COINS_REWARD_PER_QUIZ + Math.round((correct / Math.max(1, total)) * 2);
+
+    addXP(xp);
+    addCoins(coins);
+
+    const rec = {
+      id: `q_${Date.now()}`,
+      subject: quiz.subject,
+      total,
+      correct,
+      coins,
+      xp,
+      dateKey: todayKey(),
+      tsISO: endISO
+    };
+    state.history.quizzes.unshift(rec);
+    state.history.quizzes = state.history.quizzes.slice(0, 50);
+
+    pushActivity({
+      id: `a_${Date.now()}`,
+      kind: 'quiz',
+      title: state.lang === 'ar' ? `كوينز • ${quiz.subject}` : `Quiz • ${quiz.subject}`,
+      meta: `${correct}/${total} • +${coins} ${t('coins')} • +${xp} XP`,
+      dateKey: rec.dateKey,
+      tsISO: endISO
+    });
+
+    toast(state.lang === 'ar'
+      ? `نتيجتك ${correct}/${total} • +${coins} نور • +${xp} XP`
+      : `Score ${correct}/${total} • +${coins} coins • +${xp} XP`, 'ok');
+
+    saveState();
+    updateAllUI();
+    endQuiz(true);
+  };
+
+  // ---------- Store ----------
+  const renderStore = () => {
+    const grid = byId('storeGrid');
+    if (!grid) return;
+
+    grid.innerHTML = '';
+    PRODUCTS.forEach(p => {
+      const owned = p.type === 'theme' ? ensureOwned('theme', p.value) : ensureOwned('timerStyle', p.value);
+      const active = (p.type === 'theme' && state.settings.theme === p.value) ||
+                     (p.type === 'timerStyle' && state.settings.timerStyle === p.value);
+
+      const card = document.createElement('div');
+      card.className = 'prod';
+      card.dataset.pid = p.id;
+
+      const name = state.lang === 'ar' ? p.nameAR : p.nameEN;
+      const typeTxt = p.type === 'theme'
+        ? (state.lang === 'ar' ? 'Theme' : 'Theme')
+        : (state.lang === 'ar' ? 'Timer Style' : 'Timer Style');
+
+      card.innerHTML = `
+        <div class="prod__top">
+          <div>
+            <div class="prod__name"></div>
+            <div class="prod__type"></div>
+          </div>
+          <span class="tag ${active ? '' : 'tag--soft'}">${active ? (state.lang === 'ar' ? 'مفعل' : 'Active') : (state.lang === 'ar' ? 'اختياري' : 'Optional')}</span>
+        </div>
+        <div class="prod__preview"></div>
+        <div class="prod__buy">
+          <div class="prod__price">
+            <span class="dot dot--gold" aria-hidden="true"></span>
+            <strong>${p.price}</strong>
+            <span class="muted">${t('coins')}</span>
+          </div>
+          <button class="btn btn--tiny ${owned ? '' : 'btn--primary'} prod__btn" type="button"
+            data-store-action="${owned ? 'apply' : 'buy'}" data-store-id="${p.id}">
+            ${owned ? (active ? (state.lang === 'ar' ? 'مفعل' : 'Active') : t('apply')) : t('buy')}
+          </button>
+        </div>
+      `;
+
+      const nm = $('.prod__name', card);
+      const tp = $('.prod__type', card);
+      if (nm) nm.textContent = name;
+      if (tp) tp.textContent = typeTxt;
+
+      // small preview tint
+      const preview = $('.prod__preview', card);
+      if (preview) {
+        if (p.type === 'theme') {
+          preview.style.background =
+            p.value === 'mint'
+              ? 'radial-gradient(circle at 30% 20%, rgba(39,211,166,.22), rgba(255,255,255,.02))'
+              : p.value === 'sand'
+                ? 'radial-gradient(circle at 30% 20%, rgba(255,209,102,.22), rgba(255,255,255,.02))'
+                : 'radial-gradient(circle at 30% 20%, rgba(124,92,255,.20), rgba(255,255,255,.02))';
+        } else {
+          preview.style.background =
+            p.value === 'bold'
+              ? 'radial-gradient(circle at 30% 20%, rgba(255,77,109,.18), rgba(255,255,255,.02))'
+              : 'radial-gradient(circle at 30% 20%, rgba(124,92,255,.18), rgba(255,255,255,.02))';
+        }
+      }
+
+      grid.appendChild(card);
+    });
+  };
+
+  const renderPurchases = () => {
+    const list = byId('purchasesList');
+    const empty = byId('purchasesEmpty');
+    if (!list) return;
+
+    const ownedThemes = state.purchases.themes || [];
+    const ownedStyles = state.purchases.timerStyles || [];
+    const items = [
+      ...ownedThemes.map(v => ({ type: 'theme', value: v })),
+      ...ownedStyles.map(v => ({ type: 'timerStyle', value: v }))
+    ].filter(x => !(x.type === 'theme' && x.value === 'midnight') && !(x.type === 'timerStyle' && x.value === 'ring'));
+
+    list.innerHTML = '';
+    if (items.length === 0) {
+      if (empty) empty.hidden = false;
+      return;
+    }
+    if (empty) empty.hidden = true;
+
+    items.forEach(it => {
+      const li = document.createElement('li');
+      li.className = 'item';
+
+      const name = it.type === 'theme'
+        ? (state.lang === 'ar' ? `ثيم: ${it.value}` : `Theme: ${it.value}`)
+        : (state.lang === 'ar' ? `ستايل: ${it.value}` : `Style: ${it.value}`);
+
+      const isActive = (it.type === 'theme' && state.settings.theme === it.value) ||
+                       (it.type === 'timerStyle' && state.settings.timerStyle === it.value);
+
+      li.innerHTML = `
+        <div class="item__left">
+          <div class="item__title"></div>
+          <div class="item__sub">${isActive ? (state.lang === 'ar' ? 'مفعل الآن' : 'Active now') : (state.lang === 'ar' ? 'جاهز للتفعيل' : 'Ready to apply')}</div>
+        </div>
+        <div class="item__right">
+          <button class="btn btn--tiny ${isActive ? '' : 'btn--primary'}" type="button" data-apply-owned="${it.type}:${it.value}">
+            ${isActive ? (state.lang === 'ar' ? 'مفعل' : 'Active') : t('apply')}
+          </button>
+        </div>
+      `;
+      const tt = $('.item__title', li);
+      if (tt) tt.textContent = name;
+
+      list.appendChild(li);
+    });
+  };
+
+  const buyProduct = (pid) => {
+    const p = PRODUCTS.find(x => x.id === pid);
+    if (!p) return;
+
+    const owned = p.type === 'theme' ? ensureOwned('theme', p.value) : ensureOwned('timerStyle', p.value);
+    if (owned) {
+      toast(state.lang === 'ar' ? 'هذا المنتج مملوك.' : 'Already owned.', 'warn');
+      return;
+    }
+
+    if ((state.coins || 0) < p.price) {
+      toast(state.lang === 'ar' ? 'النور غير كافي.' : 'Not enough coins.', 'warn');
+      return;
+    }
+
+    addCoins(-p.price);
+    if (p.type === 'theme') {
+      state.purchases.themes = Array.from(new Set([...(state.purchases.themes || []), p.value]));
+    } else {
+      state.purchases.timerStyles = Array.from(new Set([...(state.purchases.timerStyles || []), p.value]));
+    }
+
+    pushActivity({
+      id: `a_${Date.now()}`,
+      kind: 'purchase',
+      title: state.lang === 'ar' ? `شراء من المتجر` : 'Store purchase',
+      meta: `${state.lang === 'ar' ? (p.nameAR) : (p.nameEN)} • -${p.price} ${t('coins')}`,
+      dateKey: todayKey(),
+      tsISO: new Date().toISOString()
+    });
+
+    toast(state.lang === 'ar' ? 'تم الشراء!' : 'Purchased!', 'ok');
+    saveState();
+    updateAllUI();
+  };
+
+  const applyProduct = (pid) => {
+    const p = PRODUCTS.find(x => x.id === pid);
+    if (!p) return;
+
+    const owned = p.type === 'theme' ? ensureOwned('theme', p.value) : ensureOwned('timerStyle', p.value);
+    if (!owned) {
+      toast(state.lang === 'ar' ? 'لازم تشتريه أولًا.' : 'You must buy it first.', 'warn');
+      return;
+    }
+
+    if (p.type === 'theme') state.settings.theme = p.value;
+    else state.settings.timerStyle = p.value;
+
+    toast(state.lang === 'ar' ? 'تم التفعيل.' : 'Applied.', 'ok');
+    saveState();
+    updateAllUI();
+  };
+
+  const applyOwned = (type, value) => {
+    if (!ensureOwned(type, value)) {
+      toast(state.lang === 'ar' ? 'غير مملوك.' : 'Not owned.', 'warn');
+      return;
+    }
+    if (type === 'theme') state.settings.theme = value;
+    if (type === 'timerStyle') state.settings.timerStyle = value;
+    saveState();
+    updateAllUI();
+    toast(state.lang === 'ar' ? 'تم التفعيل.' : 'Applied.', 'ok');
+  };
+
+  // ---------- Tabs + Modal + Focus ----------
+  const setActiveTab = (tab) => {
+    // Buttons
+    $$('.tab').forEach(b => b.classList.toggle('is-active', b.dataset.tab === tab));
+    // Pages
+    $$('.page').forEach(p => p.classList.toggle('is-active', p.dataset.page === tab));
+
+    // persist
+    state.lastTab = tab;
+    saveState();
+  };
+
+  const openModal = (id) => {
+    const m = byId(id);
+    if (!m) return;
+    m.classList.add('is-open');
+    m.setAttribute('aria-hidden', 'false');
+  };
+
+  const closeModal = (id) => {
+    const m = byId(id);
+    if (!m) return;
+    m.classList.remove('is-open');
+    m.setAttribute('aria-hidden', 'true');
+  };
+
+  const toggleFocus = () => {
+    const body = document.body;
+    const now = !body.classList.contains('is-focus');
+    body.classList.toggle('is-focus', now);
+    const btn = byId('focusToggle');
+    if (btn) btn.setAttribute('aria-pressed', now ? 'true' : 'false');
+    state.settings.focusOn = now;
+    saveState();
+    toast(now ? (state.lang === 'ar' ? 'تم تفعيل وضع التركيز.' : 'Focus mode enabled.') : (state.lang === 'ar' ? 'تم إلغاء وضع التركيز.' : 'Focus mode disabled.'), 'ok');
+  };
+
+  // ---------- Rendering ----------
+  const renderHeaderStats = () => {
+    const coinsValue = byId('coinsValue');
+    const levelValue = byId('levelValue');
+    const xpValue = byId('xpValue');
+    const streakValue = byId('streakValue');
+
+    if (coinsValue) coinsValue.textContent = String(state.coins || 0);
+    if (levelValue) levelValue.textContent = String(state.level || 1);
+    if (xpValue) xpValue.textContent = String(state.xp || 0);
+    if (streakValue) streakValue.textContent = String(state.streak || 0);
+
+    const modalCoins = byId('modalCoins');
+    const modalLevel = byId('modalLevel');
+    if (modalCoins) modalCoins.textContent = String(state.coins || 0);
+    if (modalLevel) modalLevel.textContent = String(state.level || 1);
+
+    const profileCoins = byId('profileCoins');
+    const profileLevel = byId('profileLevel');
+    const profileStreak = byId('profileStreak');
+    if (profileCoins) profileCoins.textContent = String(state.coins || 0);
+    if (profileLevel) profileLevel.textContent = String(state.level || 1);
+    if (profileStreak) profileStreak.textContent = String(state.streak || 0);
+  };
+
+  const renderProgress = () => {
+    const xpNeed = xpNeededFor(state.level || 1);
+    const xpNow = clamp(Number(state.xp) || 0, 0, xpNeed);
+    const xpPct = xpNeed ? (xpNow / xpNeed) * 100 : 0;
+
+    const xpNowEl = byId('xpNow');
+    const xpNeedEl = byId('xpNeed');
+    const levelBar = byId('levelBar');
+
+    if (xpNowEl) xpNowEl.textContent = String(xpNow);
+    if (xpNeedEl) xpNeedEl.textContent = String(xpNeed);
+    if (levelBar) levelBar.style.width = `${xpPct}%`;
+
+    // Daily goal
+    const goalNeed = Math.max(10, Number(state.settings.dailyGoalMin) || 60);
+    const goalNow = minutesForDate(todayKey());
+    const goalPct = clamp(goalNow / goalNeed, 0, 1) * 100;
+
+    const goalNowEl = byId('goalNow');
+    const goalNeedEl = byId('goalNeed');
+    const goalBar = byId('goalBar');
+
+    if (goalNowEl) goalNowEl.textContent = String(goalNow);
+    if (goalNeedEl) goalNeedEl.textContent = String(goalNeed);
+    if (goalBar) goalBar.style.width = `${goalPct}%`;
+
+    // mini bar
+    const dailyMiniNeed = byId('dailyMiniNeed');
+    const dailyMiniNow = byId('dailyMiniNow');
+    const dailyMiniBar = byId('dailyMiniBar');
+
+    if (dailyMiniNeed) dailyMiniNeed.textContent = String(goalNeed);
+    if (dailyMiniNow) dailyMiniNow.textContent = String(goalNow);
+    if (dailyMiniBar) dailyMiniBar.style.width = `${goalPct}%`;
+
+    const todayMinutes = byId('todayMinutes');
+    if (todayMinutes) todayMinutes.textContent = String(goalNow);
+
+    // claim state
+    const claim = byId('dailyClaimState');
+    if (claim) claim.textContent = canClaimDaily() ? (state.lang === 'ar' ? 'جاهز' : 'Ready') : t('locked');
+
+    // reward tags
+    const levelRewardCoins = byId('levelRewardCoins');
+    const quizBonusCoins = byId('quizBonusCoins');
+    if (levelRewardCoins) levelRewardCoins.textContent = String(COINS_REWARD_LEVELUP);
+    if (quizBonusCoins) quizBonusCoins.textContent = String(COINS_REWARD_PER_QUIZ);
+  };
+
+  const renderSessions = () => {
+    const list = byId('sessionsList');
+    const empty = byId('sessionsEmpty');
+    if (!list) return;
+
+    const items = (state.history.sessions || []).slice(0, 12);
+    list.innerHTML = '';
+
+    if (items.length === 0) {
+      if (empty) empty.hidden = false;
+      return;
+    }
+    if (empty) empty.hidden = true;
+
+    items.forEach(s => {
+      const li = document.createElement('li');
+      li.className = 'item';
+      const when = new Date(s.endISO || s.startISO || Date.now());
+      const hh = pad2(when.getHours());
+      const mm = pad2(when.getMinutes());
+      const title = state.lang === 'ar' ? `${s.subject}` : `${s.subject}`;
+      const sub = state.lang === 'ar'
+        ? `${s.minutes} دقيقة • ${hh}:${mm} • +${s.coins} نور • +${s.xp} XP`
+        : `${s.minutes} min • ${hh}:${mm} • +${s.coins} coins • +${s.xp} XP`;
+
+      li.innerHTML = `
+        <div class="item__left">
+          <div class="item__title"></div>
+          <div class="item__sub"></div>
+        </div>
+        <div class="item__right">
+          <span class="tag tag--soft">${s.dateKey}</span>
+        </div>
+      `;
+      const tt = $('.item__title', li);
+      const ss = $('.item__sub', li);
+      if (tt) tt.textContent = title;
+      if (ss) ss.textContent = sub;
+      list.appendChild(li);
+    });
+  };
+
+  const renderQuizHistory = () => {
+    const list = byId('quizHistoryList');
+    const empty = byId('quizHistoryEmpty');
+    if (!list) return;
+
+    const items = (state.history.quizzes || []).slice(0, 12);
+    list.innerHTML = '';
+
+    if (items.length === 0) {
+      if (empty) empty.hidden = false;
+      return;
+    }
+    if (empty) empty.hidden = true;
+
+    items.forEach(q => {
+      const li = document.createElement('li');
+      li.className = 'item';
+      const title = state.lang === 'ar' ? `${q.subject}` : `${q.subject}`;
+      const sub = state.lang === 'ar'
+        ? `${q.correct}/${q.total} • +${q.coins} نور • +${q.xp} XP`
+        : `${q.correct}/${q.total} • +${q.coins} coins • +${q.xp} XP`;
+
+      li.innerHTML = `
+        <div class="item__left">
+          <div class="item__title"></div>
+          <div class="item__sub"></div>
+        </div>
+        <div class="item__right">
+          <span class="tag tag--soft">${q.dateKey}</span>
+        </div>
+      `;
+      const tt = $('.item__title', li);
+      const ss = $('.item__sub', li);
+      if (tt) tt.textContent = title;
+      if (ss) ss.textContent = sub;
+      list.appendChild(li);
+    });
+  };
+
+  const renderStats = () => {
+    const kpiToday = byId('kpiToday');
+    const kpiWeek = byId('kpiWeek');
+    const kpiTotal = byId('kpiTotal');
+    const kpiTop = byId('kpiTopSubject');
+
+    const tMin = minutesForDate(todayKey());
+    const wMin = weekMinutes();
+    const allMin = totalMinutes();
+
+    if (kpiToday) kpiToday.textContent = String(tMin);
+    if (kpiWeek) kpiWeek.textContent = String(wMin);
+    if (kpiTotal) kpiTotal.textContent = String(allMin);
+    if (kpiTop) kpiTop.textContent = topSubject();
+
+    // Week line bars
+    const line = byId('weekLine');
+    if (line) {
+      line.innerHTML = '';
+      const now = new Date();
+      const days = [];
+      for (let i = 6; i >= 0; i--) {
+        const dk = todayKey(addDays(now, -i));
+        days.push({ dk, min: minutesForDate(dk) });
+      }
+      const max = Math.max(10, ...days.map(d => d.min));
+
+      days.forEach(d => {
+        const el = document.createElement('div');
+        el.className = 'dayBar';
+        const pct = clamp(d.min / max, 0, 1) * 100;
+
+        const short = d.dk.slice(5); // MM-DD
+        el.innerHTML = `
+          <div class="dayBar__col"><div class="dayBar__fill" style="height:${pct}%"></div></div>
+          <div class="dayBar__lbl">${short}</div>
+          <div class="dayBar__val">${d.min}</div>
+        `;
+        line.appendChild(el);
+      });
+    }
+
+    // Activity list
+    const list = byId('activityList');
+    const empty = byId('activityEmpty');
+    if (list) {
+      const items = (state.history.activity || []).slice(0, 16);
+      list.innerHTML = '';
+
+      if (items.length === 0) {
+        if (empty) empty.hidden = false;
+      } else {
+        if (empty) empty.hidden = true;
+        items.forEach(a => {
+          const li = document.createElement('li');
+          li.className = 'item';
+          li.innerHTML = `
+            <div class="item__left">
+              <div class="item__title"></div>
+              <div class="item__sub"></div>
+            </div>
+            <div class="item__right">
+              <span class="tag tag--soft">${a.dateKey || ''}</span>
+            </div>
+          `;
+          const tt = $('.item__title', li);
+          const ss = $('.item__sub', li);
+          if (tt) tt.textContent = a.title || '';
+          if (ss) ss.textContent = a.meta || '';
+          list.appendChild(li);
+        });
+      }
+    }
+  };
+
+  const renderSettings = () => {
+    const daily = byId('dailyGoalInput');
+    if (daily) daily.value = String(Number(state.settings.dailyGoalMin) || 60);
+
+    const soundBtn = byId('soundToggle');
+    const soundState = byId('soundState');
+    const isOn = !!state.settings.soundOn;
+    if (soundBtn) soundBtn.classList.toggle('is-off', !isOn);
+    if (soundBtn) soundBtn.setAttribute('aria-checked', isOn ? 'true' : 'false');
+    if (soundState) soundState.textContent = isOn ? t('on') : t('off');
+
+    // selects (only if owned; otherwise fallback)
+    const themeSelect = byId('themeSelect');
+    const timerStyleSelect = byId('timerStyleSelect');
+    const modalThemeSelect = byId('modalThemeSelect');
+    const modalTimerStyleSelect = byId('modalTimerStyleSelect');
+
+    const theme = ensureOwned('theme', state.settings.theme) ? state.settings.theme : 'midnight';
+    const style = ensureOwned('timerStyle', state.settings.timerStyle) ? state.settings.timerStyle : 'ring';
+    state.settings.theme = theme;
+    state.settings.timerStyle = style;
+
+    if (themeSelect) themeSelect.value = theme;
+    if (timerStyleSelect) timerStyleSelect.value = style;
+    if (modalThemeSelect) modalThemeSelect.value = theme;
+    if (modalTimerStyleSelect) modalTimerStyleSelect.value = style;
+  };
+
+  const updateAllUI = () => {
+    applyLang();
+    applyTheme();
+
+    renderHeaderStats();
+    renderProgress();
+    renderSessions();
+    renderQuizHistory();
+    renderStore();
+    renderPurchases();
+    renderStats();
+    renderSettings();
+    renderTimer();
+    updateModeUI();
+
+    const year = byId('yearNow');
+    if (year) year.textContent = String(new Date().getFullYear());
+    const openName = byId('profileName');
+    const savedName = state.profileName || '';
+    if (openName && savedName) openName.textContent = savedName;
+  };
+
+  // ---------- Export + reset ----------
+  const exportData = () => {
+    try {
+      const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `serag_export_${todayKey()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast(state.lang === 'ar' ? 'تم تصدير البيانات.' : 'Exported.', 'ok');
+    } catch {
+      toast(state.lang === 'ar' ? 'فشل التصدير.' : 'Export failed.', 'bad');
+    }
+  };
+
+  const resetAll = () => {
+    const ok = window.confirm(state.lang === 'ar'
+      ? 'متأكد؟ رح يتم مسح كل شيء.'
+      : 'Are you sure? This will erase everything.');
+    if (!ok) return;
+
+    state = structuredClone(defaults);
+    timer.running = false;
+    pauseTimer();
+    saveState();
+    toast(state.lang === 'ar' ? 'تمت إعادة الضبط.' : 'Reset completed.', 'ok');
+    updateAllUI();
+    setActiveTab('timer');
+  };
+
+  // ---------- Event delegation (single binding) ----------
+  const bindOnce = () => {
+    if (window.__SERAG_BOUND__) return;
+    window.__SERAG_BOUND__ = true;
+
+    // Tabs + delegated actions
+    on(document, 'click', (e) => {
+      const target = e.target;
+
+      // close toasts
+      const toastClose = target?.closest?.('[data-toast-close]');
+      if (toastClose) {
+        const id = toastClose.getAttribute('data-toast-close');
+        const el = byId('toastRoot')?.querySelector?.(`[data-toast-id="${id}"]`);
+        if (el) el.remove();
+        return;
+      }
+
+      // Tabs
+      const tabBtn = target?.closest?.('.tab');
+      if (tabBtn && tabBtn.dataset.tab) {
+        setActiveTab(tabBtn.dataset.tab);
+        return;
+      }
+
+      // Timer mode segment
+      const segBtn = target?.closest?.('.seg__btn');
+      if (segBtn && segBtn.dataset.mode) {
+        setMode(segBtn.dataset.mode);
+        return;
+      }
+
+      // Quick actions
+      if (target?.closest?.('#btnOpenQuiz')) { setActiveTab('quizzes'); return; }
+      if (target?.closest?.('#btnOpenStore')) { setActiveTab('store'); return; }
+
+      // Modal close
+      const closeBtn = target?.closest?.('[data-close-modal]');
+      if (closeBtn) {
+        const mid = closeBtn.getAttribute('data-close-modal');
+        if (mid) closeModal(mid);
+        return;
+      }
+
+      // Store actions
+      const storeBtn = target?.closest?.('[data-store-action]');
+      if (storeBtn) {
+        const action = storeBtn.getAttribute('data-store-action');
+        const pid = storeBtn.getAttribute('data-store-id');
+        if (!pid) return;
+        if (action === 'buy') buyProduct(pid);
+        if (action === 'apply') applyProduct(pid);
+        return;
+      }
+
+      // Apply owned from purchases list
+      const applyOwnedBtn = target?.closest?.('[data-apply-owned]');
+      if (applyOwnedBtn) {
+        const v = applyOwnedBtn.getAttribute('data-apply-owned') || '';
+        const [type, value] = v.split(':');
+        if (type && value) applyOwned(type, value);
+        return;
+      }
+
+      // Quiz options
+      const optBtn = target?.closest?.('[data-quiz-option]');
+      if (optBtn && optBtn.getAttribute('data-quiz-option') != null) {
+        answerQuiz(optBtn.getAttribute('data-quiz-option'));
+        return;
+      }
+    });
+
+    // Buttons (safe binds by id)
+    onId('btnStartPause', 'click', () => { timer.running ? pauseTimer() : startTimer(); });
+    onId('btnReset', 'click', resetTimer);
+    onId('btnNext', 'click', nextMode);
+
+    onId('btnClearHistory', 'click', () => {
+      state.history.sessions = [];
+      pushActivity({
+        id: `a_${Date.now()}`,
+        kind: 'system',
+        title: state.lang === 'ar' ? 'مسح سجل الجلسات' : 'Cleared sessions history',
+        meta: '',
+        dateKey: todayKey(),
+        tsISO: new Date().toISOString()
+      });
+      saveState();
+      updateAllUI();
+      toast(state.lang === 'ar' ? 'تم مسح الجلسات.' : 'Sessions cleared.', 'ok');
+    });
+
+    onId('btnClaimDaily', 'click', claimDailyReward);
+
+    onId('btnNewQuiz', 'click', startQuiz);
+    onId('btnExitQuiz', 'click', () => endQuiz());
+    onId('btnQuizSkip', 'click', () => {
+      if (!quiz.active) return;
+      quiz.idx += 1;
+      nextQuizQuestion();
+    });
+    onId('btnQuizNext', 'click', () => {
+      if (!quiz.active) return;
+      quiz.idx += 1;
+      nextQuizQuestion();
+    });
+
+    onId('btnClearQuizHistory', 'click', () => {
+      state.history.quizzes = [];
+      saveState();
+      updateAllUI();
+      toast(state.lang === 'ar' ? 'تم مسح سجل الكوينز.' : 'Quiz history cleared.', 'ok');
+    });
+
+    onId('btnClearAllActivity', 'click', () => {
+      state.history.activity = [];
+      saveState();
+      updateAllUI();
+      toast(state.lang === 'ar' ? 'تم مسح النشاط.' : 'Activity cleared.', 'ok');
+    });
+
+    onId('btnExport', 'click', exportData);
+
+    onId('dailyGoalInput', 'change', (e) => {
+      const v = clamp(Number(e.target?.value || 60), 10, 600);
+      state.settings.dailyGoalMin = v;
+      saveState();
+      updateAllUI();
+      toast(state.lang === 'ar' ? 'تم حفظ الهدف اليومي.' : 'Daily goal saved.', 'ok');
+    });
+
+    onId('soundToggle', 'click', () => {
+      state.settings.soundOn = !state.settings.soundOn;
+      saveState();
+      updateAllUI();
+      toast(state.settings.soundOn ? (state.lang === 'ar' ? 'تم تشغيل الصوت.' : 'Sound on.') : (state.lang === 'ar' ? 'تم إيقاف الصوت.' : 'Sound off.'), 'ok');
+    });
+
+    const trySelectApply = (selectId, type) => {
+      const sel = byId(selectId);
+      if (!sel) return;
+      const val = String(sel.value || '');
+      if (!ensureOwned(type, val)) {
+        toast(state.lang === 'ar' ? 'هذا الخيار غير مملوك. اشترِه من المتجر.' : 'Not owned. Buy it from the store.', 'warn');
+        // revert
+        sel.value = (type === 'theme') ? state.settings.theme : state.settings.timerStyle;
+        return;
+      }
+      if (type === 'theme') state.settings.theme = val;
+      if (type === 'timerStyle') state.settings.timerStyle = val;
+      saveState();
+      updateAllUI();
+      toast(state.lang === 'ar' ? 'تم التفعيل.' : 'Applied.', 'ok');
+    };
+
+    onId('themeSelect', 'change', () => trySelectApply('themeSelect', 'theme'));
+    onId('timerStyleSelect', 'change', () => trySelectApply('timerStyleSelect', 'timerStyle'));
+    onId('btnSaveModal', 'click', () => {
+      trySelectApply('modalThemeSelect', 'theme');
+      trySelectApply('modalTimerStyleSelect', 'timerStyle');
+      closeModal('profileModal');
+    });
+
+    onId('btnResetAll', 'click', resetAll);
+
+    onId('btnSaveProfile', 'click', () => {
+      const v = String(byId('nameInput')?.value || '').trim();
+      if (v) {
+        state.profileName = v;
+        state.profileNameTouched = true;
+        saveState();
+        updateAllUI();
+        toast(state.lang === 'ar' ? 'تم حفظ الاسم.' : 'Name saved.', 'ok');
+      } else {
+        toast(state.lang === 'ar' ? 'اكتب اسمًا أولًا.' : 'Please enter a name.', 'warn');
+      }
+    });
+
+    onId('openProfile', 'click', () => openModal('profileModal'));
+
+    onId('focusToggle', 'click', toggleFocus);
+
+    onId('langToggle', 'click', () => {
+      state.lang = (state.lang === 'ar') ? 'en' : 'ar';
+      saveState();
+      updateAllUI();
+      toast(state.lang === 'ar' ? 'تم تغيير اللغة للعربية.' : 'Language switched to English.', 'ok');
+    });
+
+    onId('customMinutes', 'change', () => {
+      if (timer.mode === 'study' && !timer.running) {
+        timer.totalSeconds = getModeSeconds('study');
+        timer.secondsLeft = timer.totalSeconds;
+        renderTimer();
+      }
+    });
+
+    // Esc closes modal
+    on(document, 'keydown', (e) => {
+      if (e.key === 'Escape') closeModal('profileModal');
+    });
+  };
+
+  // ---------- Init ----------
+  const sanitizeState = () => {
+    state.coins = Math.max(0, Math.trunc(Number(state.coins) || 0));
+    state.level = Math.max(1, Math.trunc(Number(state.level) || 1));
+    state.xp = Math.max(0, Math.trunc(Number(state.xp) || 0));
+    state.streak = Math.max(0, Math.trunc(Number(state.streak) || 0));
+
+    state.settings = state.settings || {};
+    state.settings.dailyGoalMin = clamp(Number(state.settings.dailyGoalMin || 60), 10, 600);
+    state.settings.soundOn = !!state.settings.soundOn;
+    state.settings.theme = state.settings.theme || 'midnight';
+    state.settings.timerStyle = state.settings.timerStyle || 'ring';
+
+    state.purchases = state.purchases || { themes: ['midnight'], timerStyles: ['ring'] };
+    state.purchases.themes = Array.from(new Set([...(state.purchases.themes || []), 'midnight']));
+    state.purchases.timerStyles = Array.from(new Set([...(state.purchases.timerStyles || []), 'ring']));
+
+    // Ensure active selections are owned
+    if (!ensureOwned('theme', state.settings.theme)) state.settings.theme = 'midnight';
+    if (!ensureOwned('timerStyle', state.settings.timerStyle)) state.settings.timerStyle = 'ring';
+  };
+
+  const boot = () => {
+    sanitizeState();
+    bindOnce();
+
+    // Focus persisted
+    const focusOn = !!state.settings.focusOn;
+    document.body.classList.toggle('is-focus', focusOn);
+    const focusBtn = byId('focusToggle');
+    if (focusBtn) focusBtn.setAttribute('aria-pressed', focusOn ? 'true' : 'false');
+
+    // Default timer
+    setMode('study');
+
+    // Restore last tab if valid
+    const lastTab = state.lastTab || 'timer';
+    const okTabs = new Set(['timer', 'quizzes', 'store', 'stats', 'settings']);
+    setActiveTab(okTabs.has(lastTab) ? lastTab : 'timer');
+
+    updateAllUI();
+    saveState();
+  };
+
+  on(document, 'DOMContentLoaded', boot);
 })();
