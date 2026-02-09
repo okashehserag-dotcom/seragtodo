@@ -734,3 +734,51 @@ html[dir="ltr"] .footer__txt{ direction:ltr; }
   border: 1px solid rgba(255,77,109,.35);
   z-index:999;
 }
+/* ===== Timer Styles (store) ===== */
+/* كل ستايل بنطبقه على #timerFace حسب body[data-timer-style="..."] */
+
+body[data-timer-style="fire"] #timerFace{
+  border-color: rgba(255, 77, 109, .28);
+  background: rgba(255, 77, 109, .06);
+}
+body[data-timer-style="fire"] #timerFace .timerFace__ring{
+  background:
+    radial-gradient(circle at 30% 30%, rgba(255,255,255,.10), transparent 52%),
+    conic-gradient(from 180deg,
+      rgba(255, 77, 109, .00),
+      rgba(255, 77, 109, .26),
+      rgba(255, 209, 102, .18),
+      rgba(255, 77, 109, .00)
+    );
+}
+
+body[data-timer-style="ice"] #timerFace{
+  border-color: rgba(140, 200, 255, .28);
+  background: rgba(140, 200, 255, .06);
+}
+body[data-timer-style="ice"] #timerFace .timerFace__ring{
+  background:
+    radial-gradient(circle at 30% 30%, rgba(255,255,255,.10), transparent 52%),
+    conic-gradient(from 180deg,
+      rgba(140, 200, 255, .00),
+      rgba(140, 200, 255, .28),
+      rgba(39, 211, 166, .12),
+      rgba(140, 200, 255, .00)
+    );
+}
+
+body[data-timer-style="electric"] #timerFace{
+  border-color: rgba(124, 92, 255, .38);
+  background: rgba(124, 92, 255, .06);
+}
+body[data-timer-style="electric"] #timerFace .timerFace__ring{
+  background:
+    radial-gradient(circle at 30% 30%, rgba(255,255,255,.10), transparent 52%),
+    conic-gradient(from 210deg,
+      rgba(124, 92, 255, .00),
+      rgba(124, 92, 255, .34),
+      rgba(255, 209, 102, .16),
+      rgba(39, 211, 166, .12),
+      rgba(124, 92, 255, .00)
+    );
+}
