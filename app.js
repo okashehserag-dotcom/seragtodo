@@ -1344,7 +1344,6 @@ const fillSelect = (sel) => {
 
 fillSelect(byId('timerStyleSelect'));
 fillSelect(byId('modalTimerStyleSelect'));
-  };
 
   const updateAllUI = () => {
     applyLang();
