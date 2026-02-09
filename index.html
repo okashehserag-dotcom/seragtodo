@@ -1,1 +1,265 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>سِراج | Siraj</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">سِ</div>
+      <div class="brandText">
+        <div class="brandName">سِراج</div>
+        <div class="brandTag">Study • Focus • Shine</div>
+      </div>
+    </div>
+
+    <div class="hud">
+      <div class="pill">
+        <span class="muted">🪙 نور</span>
+        <strong id="coins">0</strong>
+      </div>
+      <div class="pill">
+        <span class="muted">⭐ المستوى</span>
+        <strong id="level">1</strong>
+      </div>
+      <div class="pill">
+        <span class="muted">🔥 ستريك</span>
+        <strong id="streak">0</strong>
+      </div>
+    </div>
+  </header>
+
+  <nav class="nav">
+    <button class="tab active" data-view="study">الدراسة</button>
+    <button class="tab" data-view="stats">الإحصائيات</button>
+    <button class="tab" data-view="store">المتجر</button>
+    <button class="tab" data-view="profile">الملف</button>
+    <button class="tab" data-view="settings">الإعدادات</button>
+  </nav>
+
+  <main class="container">
+
+    <!-- STUDY -->
+    <section class="view show" id="view-study">
+      <div class="grid2">
+        <div class="card">
+          <div class="row between">
+            <h2>جلسة الدراسة</h2>
+            <div class="badge" id="timerStyleBadge">⏱️ Classic</div>
+          </div>
+
+          <div class="timerWrap" id="timerWrap">
+            <div class="timerCircle" id="timerCircle">
+              <div class="timerTime" id="time">25:00</div>
+              <div class="timerSub" id="timerLabel">دراسة</div>
+            </div>
+            <div class="progressTiny">
+              <div class="progressTinyFill" id="timerFill"></div>
+            </div>
+          </div>
+
+          <div class="row gap">
+            <label class="field">
+              <span class="muted">المادة</span>
+              <input id="subject" type="text" placeholder="مثال: رياضيات" maxlength="24" />
+            </label>
+
+            <label class="field">
+              <span class="muted">نوع الجلسة</span>
+              <select id="mode">
+                <option value="study">دراسة (25)</option>
+                <option value="short">استراحة قصيرة (5)</option>
+                <option value="long">استراحة طويلة (15)</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="row gap">
+            <button class="btn primary" id="startBtn">ابدأ</button>
+            <button class="btn" id="pauseBtn">إيقاف مؤقت</button>
+            <button class="btn danger" id="resetBtn">إعادة</button>
+          </div>
+
+          <div class="row between">
+            <div class="muted">مكافأة الإكمال</div>
+            <div class="pill">
+              <span class="muted">🪙</span>
+              <strong id="rewardPreview">+10</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>خط الإنجاز</h2>
+
+          <div class="row between">
+            <div class="muted">التقدّم للمستوى التالي</div>
+            <div class="muted"><span id="xpNow">0</span>/<span id="xpNext">100</span></div>
+          </div>
+
+          <div class="progress">
+            <div class="progressFill" id="xpBar"></div>
+          </div>
+
+          <div class="divider"></div>
+
+          <h3>هدف اليوم</h3>
+          <div class="row between">
+            <div class="muted">جلسات مكتملة اليوم</div>
+            <div><strong id="todaySessions">0</strong> / <span id="dailyGoal">4</span></div>
+          </div>
+          <div class="progress">
+            <div class="progressFill" id="dailyBar"></div>
+          </div>
+
+          <div class="row between">
+            <div class="muted">مكافأة هدف اليوم</div>
+            <div class="pill"><span class="muted">🪙</span><strong>+30</strong></div>
+          </div>
+
+          <div class="divider"></div>
+
+          <h3>سجل سريع</h3>
+          <div class="list" id="historyMini"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- STATS -->
+    <section class="view" id="view-stats">
+      <div class="grid2">
+        <div class="card">
+          <h2>ملخص</h2>
+          <div class="statsGrid">
+            <div class="stat">
+              <div class="muted">جلسات اليوم</div>
+              <div class="big" id="statToday">0</div>
+            </div>
+            <div class="stat">
+              <div class="muted">جلسات الأسبوع</div>
+              <div class="big" id="statWeek">0</div>
+            </div>
+            <div class="stat">
+              <div class="muted">دقائق الدراسة</div>
+              <div class="big" id="statMinutes">0</div>
+            </div>
+            <div class="stat">
+              <div class="muted">أكثر مادة</div>
+              <div class="big" id="statTop">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>آخر الجلسات</h2>
+          <div class="list" id="historyFull"></div>
+          <div class="row gap">
+            <button class="btn danger" id="clearHistory">مسح السجل</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- STORE -->
+    <section class="view" id="view-store">
+      <div class="card">
+        <div class="row between">
+          <h2>المتجر</h2>
+          <div class="pill"><span class="muted">رصيدك</span> <strong id="coins2">0</strong></div>
+        </div>
+        <p class="muted">اشتري أشكال/ثيمات باستخدام 🪙 نور. بعد الشراء تقدر تفعّلها من الملف الشخصي.</p>
+      </div>
+
+      <div class="grid3" id="storeGrid"></div>
+    </section>
+
+    <!-- PROFILE -->
+    <section class="view" id="view-profile">
+      <div class="grid2">
+        <div class="card">
+          <h2>الملف الشخصي</h2>
+
+          <div class="row gap">
+            <label class="field">
+              <span class="muted">اسمك</span>
+              <input id="username" type="text" placeholder="سراج" maxlength="18" />
+            </label>
+            <div class="field">
+              <span class="muted">لقب</span>
+              <div class="pill" id="title">طالب منير</div>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <h3>التخصيص</h3>
+          <div class="row gap">
+            <label class="field">
+              <span class="muted">ثيم</span>
+              <select id="themeSelect"></select>
+            </label>
+            <label class="field">
+              <span class="muted">شكل المؤقت</span>
+              <select id="timerStyleSelect"></select>
+            </label>
+          </div>
+
+          <div class="row gap">
+            <button class="btn primary" id="saveProfile">حفظ</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>الإنجازات</h2>
+          <div class="list" id="achievements"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="view" id="view-settings">
+      <div class="grid2">
+        <div class="card">
+          <h2>الإعدادات</h2>
+          <div class="row gap">
+            <label class="field">
+              <span class="muted">هدف يومي (جلسات)</span>
+              <input id="dailyGoalInput" type="number" min="1" max="12" value="4" />
+            </label>
+            <label class="field">
+              <span class="muted">صوت تنبيه</span>
+              <select id="soundSelect">
+                <option value="on">مفعّل</option>
+                <option value="off">مطفأ</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="row gap">
+            <button class="btn primary" id="saveSettings">حفظ</button>
+            <button class="btn danger" id="resetAll">إعادة ضبط كل شيء</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>ملاحظات</h2>
+          <ul class="muted">
+            <li>البيانات محفوظة على جهازك (LocalStorage).</li>
+            <li>الكوينز تُمنح فقط عند إكمال جلسة دراسة.</li>
+            <li>الاستراحات ما تعطي كوينز (تركيز = إنجاز).</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
 
